@@ -37,7 +37,7 @@ def insertOne(req):
     from statsMonitoring import parallel_test
     updatedDoc=parallel_test( [req,[]] )
     docid=req["request_name"]
-    if not len(updatedDoc) or updatedDoc==None:
+    if updatedDoc==None or not len(updatedDoc):
         print "failed to get anything for",docid
         return False
     updatedDoc['_id'] = docid
@@ -51,6 +51,13 @@ def worthTheUpdate(new,old):
     if FORCE: 
         return True
 
+    if old['pdmv_evts_in_DAS']!=new['pdmv_evts_in_DAS']:
+        return True
+    if old['pdmv_status_in_DAS']!=new['pdmv_status_in_DAS']:
+        return True
+    if old['pdmv_status_from_reqmngr']!=new['pdmv_status_from_reqmngr']:
+        return True
+    
     if old!=new:
 
         if set(old.keys())!=set(new.keys()):
@@ -90,6 +97,7 @@ def worthTheUpdate(new,old):
             return True
         ##otherwise do not update, even with minor changes
         print "minor changes to",new['pdmv_request_name'],n_more,"more events for",f_more
+        print old['pdmv_status_from_reqmngr'], new['pdmv_status_from_reqmngr']
         return False
     else:
         return False
@@ -97,7 +105,12 @@ def worthTheUpdate(new,old):
 def updateOne(docid,req_list):
     global statsCouch
     match_req_list=filter (lambda r: r["request_name"]==docid, req_list)
-    thisDoc=statsCouch.get_file_info(docid)
+    try:
+        thisDoc=statsCouch.get_file_info(docid)
+    except:
+        print "There was an access crash with",docid
+        return False
+    
     updatedDoc=copy.deepcopy(thisDoc)
     #print "before update"
     #pprint.pprint(thisDoc)
@@ -156,13 +169,21 @@ def dumpSome(docids,limit):
     dump=[]
     for docid in docids:
         if limit and len(dump)>= limit: break
-        dump.append( statsCouch.get_file_info( docid) )
-        dump[-1].pop('_id')
-        dump[-1].pop('_rev')
+        try:
+            a_doc = statsCouch.get_file_info( docid)
+            dump.append( a_doc )
+            dump[-1].pop('_id')
+            dump[-1].pop('_rev')
+        except:
+            pass
+        #dump.append( statsCouch.get_file_info( docid) )
+        #dump[-1].pop('_id')
+        #dump[-1].pop('_rev')
     return dump
 
 docs=[]
 statsCouch=None
+
 def main():
     global docs,FORCE,statsCouch
     usage= "Usage:\n %prog options"
@@ -189,15 +210,19 @@ def main():
     main_do( options )
     
 def main_do( options ):
+    global statsCouch,docs,FORCE
     #interface to the couchDB
     statsCouch=Interface(options.db+':5984/stats')
 
 
     ## get from stats couch the list of requests
-    allDocs=statsCouch.get_all_files()
+    print "Getting all stats ..."
+    #allDocs=statsCouch.get_all_files()
+    allDocs = statsCouch.get_view('all')
     docs = [doc['id'] for doc in allDocs['rows']]
     #remove the _design/stats
     docs = filter(lambda doc : not doc.startswith('_'), docs)
+    print "... done"
 
     nproc=5
     limit=None
@@ -207,8 +232,10 @@ def main_do( options ):
     if options.do == 'insert':
         ## get from wm couch
         from statsMonitoring import parallel_test,get_requests_list
+        print "Getting all req ..."
         req_list = get_requests_list()
-
+        print "... done"
+        
         ## insert new requests, not already in stats couch into stats couch
         #insertAll(req_list,docs,options.search,limit)
 
@@ -225,12 +252,15 @@ def main_do( options ):
         #print len(req_list)
             
         #skip trying to insert aborted and rejected or failed
+        #req_list = filter( lambda req : not req["status"] in ['aborted','rejected','failed','aborted-archived','rejected-archived','failed-archived'], req_list )
         req_list = filter( lambda req : not req["status"] in ['aborted','rejected','failed'], req_list )
         #print len(req_list)
             
         #do not update TaskChain request statuses
         req_list = filter( lambda req : 'type' in req and req['type']!='TaskChain', req_list)
         #print len(req_list)
+
+        pprint.pprint( req_list)
             
         if limit:
             req_list = req_list[0:limit]
@@ -238,7 +268,7 @@ def main_do( options ):
             
         newentries=0
         print "Dispaching",len(req_list),"requests to",str(nproc),"processes..."
-        pool = multiprocessing.Pool(5)
+        pool = multiprocessing.Pool(nproc)
         results=pool.map( insertOne, req_list )
         print "End dispatching!"
 
@@ -254,7 +284,9 @@ def main_do( options ):
     elif options.do =='kill' or options.do =='list' :
         ## get from wm couch
         from statsMonitoring import parallel_test,get_requests_list
+        print "Getting all req ..."        
         req_list = get_requests_list()
+        print "... done"
 
         removed=[]
         if options.search:
@@ -275,7 +307,9 @@ def main_do( options ):
     elif options.do == 'update':
         ## get from wm couch
         from statsMonitoring import parallel_test,get_requests_list
+        print "Getting all req ..."
         req_list = get_requests_list()
+        print "... done"
         
         ## unthreaded
         #updateSeveral(docs,req_list,pattern=None)

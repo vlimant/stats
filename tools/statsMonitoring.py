@@ -46,9 +46,9 @@ from phedex import phedex,runningSites,custodials,atT2,atT3
 # Collect all the requests which are in one of these stati which allow for 
 priority_changable_stati=['new','assignment-approved']
 #skippable_stati=[]
-skippable_stati=["rejected", "aborted","failed"]
+skippable_stati=["rejected", "aborted","failed","rejected-archived","aborted-archived","failed-archived"]
 #complete_stati=["announced","closed-out","completed","rejected", "aborted","failed"]
-complete_stati=["announced","rejected", "aborted","failed"]
+complete_stati=["announced","rejected", "aborted","failed","normal-archived","aborted-archived","failed-archived"]
 
 # Types of requests
 request_types=['MonteCarlo',
@@ -141,6 +141,20 @@ def generic_get(url,do_eval=True):
 #-------------------------------------------------------------------------------
 
 def get_requests_list(pattern=""):
+  opener=urllib2.build_opener(X509CertOpen())  
+  url="https://cmsweb.cern.ch/wmstats/_design/WMStats/_view/requestByStatusAndType?stale=update_after"
+  datareq = urllib2.Request(url)
+  datareq.add_header('authenticated_wget', "The ultimate wgetter")  
+  print "Getting the list of requests from %s..." %url,
+  requests_list_str=opener.open(datareq).read()  
+  print " Got it in %s Bytes"%len(requests_list_str)
+  data = json.loads( requests_list_str )
+  ## build backward compatibility
+  req_list= map( lambda item : {"request_name" : item[0], "status" : item[1], "type" :item[2]}, map(lambda r : r['key'] , data['rows']))
+
+  return req_list
+
+def get_requests_list_old(pattern=""):
   opener=urllib2.build_opener(X509CertOpen())  
   url="%srequestmonitor"%gm_address
   if pattern!="":
@@ -283,8 +297,10 @@ def get_expected_events(request_name):
 def get_expected_events_withdict(dict_from_workload):
   if 'RequestNumEvents' in dict_from_workload['request']['schema']:
     rne=dict_from_workload['request']['schema']['RequestNumEvents']
-  else:
+  elif 'RequestSizeEvents' in dict_from_workload['request']['schema']:
     rne=dict_from_workload['request']['schema']['RequestSizeEvents']
+  else:
+    rne=None
     
   if not 'FilterEfficiency' in dict_from_workload['request']['schema']:
     f=1.
@@ -294,17 +310,27 @@ def get_expected_events_withdict(dict_from_workload):
   if not 'InputDatasets' in dict_from_workload['request']['schema']:
     ids=[]
   else:
-    ids=dict_from_workload['request']['schema']['InputDatasets']
+    try:
+      ids=dict_from_workload['request']['schema']['InputDatasets'].split(',')
+    except:
+      ids=dict_from_workload['request']['schema']['InputDatasets']
+    
 
   if not 'BlockWhitelist' in dict_from_workload['request']['schema']:
     bwl=[]
   else:
-    bwl=dict_from_workload['request']['schema']['BlockWhitelist']
+    try:
+      bwl=dict_from_workload['request']['schema']['BlockWhitelist'].split(',')
+    except:
+      bwl=dict_from_workload['request']['schema']['BlockWhitelist']
 
   if not 'RunWhitelist' in dict_from_workload['request']['schema']:
     rwl=[]
   else:
-    rwl=dict_from_workload['request']['schema']['RunWhitelist']
+    try:
+      rwl=dict_from_workload['request']['schema']['RunWhitelist'].split(',')
+    except:
+      rwl=dict_from_workload['request']['schema']['RunWhitelist']
     
   return get_expected_events_withinput(rne,
                                        ids,
@@ -319,9 +345,9 @@ def get_expected_events_withinput(
   bwl,
   rwl,
   filter_eff):
-  
+    #print "Calucalating expected events", rne, ids, bwl, rwl, filter_eff
     #wrap up
-    if rne=='None' or rne==None:
+    if rne=='None' or rne==None or rne==0:
 
         from DBSAPI.dbsApi import DbsApi
         dbsapi = DbsApi()
@@ -352,10 +378,12 @@ def get_expected_events_withinput(
             if len(bwl):
               ##we have a block white list in input
               for b in bwl:
+                #print "summing for",b
                 if not '#' in b: continue
                 for bdbs in filter(lambda bl: bl['Name']==b, blocks):
                   s+=bdbs['NumberOfEvents']
             else:
+              print "summing all blocks"
               for bdbs in blocks:
                 s+=bdbs['NumberOfEvents']
         return s*filter_eff
@@ -405,8 +433,71 @@ def prepIDs2ReqNames(prepIDs):
 # typical name etorassa_EXO-Fall11_R4-01119_T1_UK_RAL_MSS_v1_120207_173750_3364
 # after the first _ count 2 - and stop at _
 def get_prep_id(request):
-  req_name=request["request_name"]
+    req_name=request["request_name"]
 
+    name = req_name
+    while name.count('_')>=1:
+        name = name.split('_',1)[-1]
+        if name.count('-') ==2:
+            (pwg,campaign,begin_withserial) = name.split('-')
+            if len(pwg) == 3:
+                if begin_withserial[0:5].isdigit():
+                    serial = begin_withserial[0:5]
+                    prep_id = '-'.join([ pwg, campaign, serial])
+                    return prep_id
+    return 'No-Prepid-Found'
+"""
+    spl = req_name.split("_")
+    for (i_word,word) in enumerate( spl ):
+        next_word=None
+        if i_word!= len(spl)-1:
+            next_word= spl[i_word+1]
+            
+        if len(word.split("-")[0]) !=3:
+            continue
+        ## abc-z
+        if word.count("-") ==2:
+            ## abc-y-z
+            if not word.split("-")[-1].isdigit():
+                continue
+            ## abc-z-<n>
+            if len(word.split("-")[-1]) != 5:
+                continue
+            ## abc-z-01234
+            return word
+        elif word.count("-") ==1 and next_word: 
+            ## abc-y_<next>
+            if next_word.count('-')!=1:
+                continue
+            ## abc-y_z-u
+            if not next_word.split("-")[-1].isdigit():
+                continue
+            ## abc-y_z-<n>
+            if len(next_word.split("-")[-1]) !=5:
+                continue
+            ## abc-y_z-01234
+            return word+"_"+next_word
+        else:
+            continue
+
+            
+    return 'No-Prepid-Found'
+"""
+"""
+    name = req_name
+    if name.count('_')>=1:
+        name = name.split('_',1)[-1]
+        if name.count('-') ==2:
+            (pwg,campaign,begin_withserial) = name.split('-')
+            if len(pwg) == 3:
+                if begin_withserial[0:5].isdigit():
+                    serial = begin_withserial[0:5]
+                    prep_id = '-'.join([ pwg, campaign, serial])
+                    return prep_id
+
+    return 'No-Prepid-Found'
+"""
+"""
   # is an ACDC request
   if "ACDC" in req_name:
     return "ACDC-ACDC-00000"
@@ -423,9 +514,15 @@ def get_prep_id(request):
       break
     char_found+=1
   return  prep_id
-  
+"""
+
 #------------------------------------------------------------------------------- 
 
+
+def timelist_to_str(timelist):
+  (h,m,s)=map(int,timelist)[3:]
+  return "%02d%02d%02d"%(h,m,s)
+  
 def datelist_to_str(datelist):
   year=str(datelist[0])[2:]
   month=str(datelist[1])
@@ -474,6 +571,9 @@ def get_campaign_from_prepid(prepid):
 #-------------------------------------------------------------------------------   
 
 def get_status_nevts_from_dbs(dataset):
+
+  print "You Loose 10CHF antanas"
+  
   undefined=(None,0,0)
   debug=False
   if dataset=='None Yet':
@@ -625,6 +725,22 @@ def calc_eta(level,running_days):
 
 #------------------------------------------------------------------------------- 
 
+def getDictFromWorkload(req_name):
+
+  dict_from_workload={}
+  from TransformRequestIntoDict import TransformRequestIntoDict
+  dict_from_workload=TransformRequestIntoDict( req_name, ['request','constraints'], True )
+  dontloopforever=0
+  while dict_from_workload==None:
+    print "The request",req_name,"does not have a workLoad ... which is a glitch"
+    dict_from_workload=TransformRequestIntoDict( req_name, ['request','constraints'], True )
+    dontloopforever+=1
+    if dontloopforever>10:
+      print "\t\tI am lost trying to get the dict workLoad for\n\t\t",req_name
+      break
+  return dict_from_workload
+
+
 numberofrequestnameprocessed=0
 def parallel_test(arguments,force=False):
   DEBUGME=False
@@ -644,6 +760,9 @@ def parallel_test(arguments,force=False):
       req["status"]='announced'
     if req["request_name"]=='etorassa_JME-Summer12-00060_batch1_v2__120209_133317_6868':
       req["status"]='announced'
+    ##faking rejected status
+    if req["request_name"]=='spinoso_SUS-Summer12pLHE-00001_4_v1_STEP0ATCERN_130914_172555_5537':
+      req["status"]="rejected"
 
     if not "status" in req:
       ## this is garbage anyways
@@ -664,23 +783,9 @@ def parallel_test(arguments,force=False):
     #allowSkippingOnRandom=0.1
     allowSkippingOnRandom=None
 
-    from TransformRequestIntoDict import TransformRequestIntoDict
     if DEBUGME: print "--"
     #transform the workload in a dictionnary for convenience , can also be made an object
     dict_from_workload={}
-    def getDictFromWorkload(req_name):
-      dict_from_workload={}
-      dict_from_workload=TransformRequestIntoDict( req_name, ['request','constraints'], True )
-      if DEBUGME: print "---"
-      dontloopforever=0
-      while dict_from_workload==None:
-        print "The request",req_name,"does not have a workLoad ... which is a glitch"
-        dict_from_workload=TransformRequestIntoDict( req_name, ['request','constraints'], True )
-        dontloopforever+=1
-        if dontloopforever>10:
-          print "\t\tI am lost trying to get the dict workLoad for\n\t\t",req_name
-          break
-      return dict_from_workload
 
 
     # check if in the old and in complete_stati, just copy and go on
@@ -688,13 +793,21 @@ def parallel_test(arguments,force=False):
     skewed=False
     deadWood=False
     if len(matching_reqs)==1:
+
       pdmv_request_dict=matching_reqs[0]
       if pdmv_request_dict['pdmv_completion_eta_in_DAS']<0 and req["status"].startswith('running'):        skewed=True
+      if req["status"].startswith('running'):        skewed=True
+      if req["status"] == 'completed': skewed=True
       if 'pdmv_expected_events' in pdmv_request_dict and pdmv_request_dict['pdmv_expected_events']==-1:        skewed=True
       if pdmv_request_dict['pdmv_status_in_DAS']=='?': skewed=True
       if pdmv_request_dict['pdmv_dataset_name']=='?' : skewed=True
       if pdmv_request_dict['pdmv_evts_in_DAS']<0 : skewed=True
-      if pdmv_request_dict["pdmv_status_from_reqmngr"]!=req_status:        skewed=True
+      if pdmv_request_dict['pdmv_evts_in_DAS']==0 and req["status"] in ['announced']: skewed=True
+      if pdmv_request_dict['pdmv_status_in_DAS']=='PRODUCTION' and req["status"] in ['announced','normal-archived']: skewed=True
+
+      if pdmv_request_dict["pdmv_status_from_reqmngr"]!=req_status and req_status!="normal-archived":
+        print "CHANGE OF STATUS, do something !"
+        skewed=True
         
       if 'pdmv_monitor_time' in pdmv_request_dict:
         up=time.mktime(time.strptime(pdmv_request_dict['pdmv_monitor_time']))
@@ -707,7 +820,9 @@ def parallel_test(arguments,force=False):
         ## Oct 9 : > 20
         ## OCt 11: > 10
         ## Oct 12: > 5 ## and stay like this
-        if deltaUpdate > 10:          skewed=True
+        if deltaUpdate > 10:
+          print 'too long ago'
+          skewed=True
 
       if not 'pdmv_monitor_time' in pdmv_request_dict:
         skewed=True
@@ -800,7 +915,7 @@ def parallel_test(arguments,force=False):
       #if (pdmv_request_dict['pdmv_status_from_reqmngr'] in complete_stati) and pdmv_request_dict['pdmv_completion_eta_in_DAS']<90:
       #  skewed=True
 
-      if not 'pdmv_dataset_list' in pdmv_request_dict or pdmv_request_dict['pdmv_dataset_list']==[]:
+      if not 'pdmv_dataset_list' in pdmv_request_dict or pdmv_request_dict['pdmv_dataset_list']==[] or force:
         dataset,dataset_list=get_dataset_name(req_name)
         pdmv_request_dict['pdmv_dataset_list']=dataset_list
         
@@ -812,7 +927,7 @@ def parallel_test(arguments,force=False):
 
 
 
-
+      print req_name," is skewed ? ",skewed
       if allowSkippingOnRandom!=None and skewed and random.random()> allowSkippingOnRandom and not force:
         #print req_name,"is there already, needs updating, but skipping for now"
         return pdmv_request_dict
@@ -836,12 +951,13 @@ def parallel_test(arguments,force=False):
 
     # assign the date
     ### JRout pdmv_request_dict["pdmv_submission_date"]=get_submission_date(req["request_name"])
-    if not 'pdmv_submission_date' in pdmv_request_dict:
+    if not 'pdmv_submission_date' in pdmv_request_dict or not 'pdmv_submission_time' in pdmv_request_dict:
       ##load it on demand only
       if not dict_from_workload: dict_from_workload=getDictFromWorkload(req_name)
       if not dict_from_workload: return {}
       
       pdmv_request_dict["pdmv_submission_date"]=datelist_to_str(dict_from_workload['request']['schema']['RequestDate'])
+      pdmv_request_dict["pdmv_submission_time"]=timelist_to_str(dict_from_workload['request']['schema']['RequestDate'])
       if DEBUGME: print "----"
       if  pdmv_request_dict["pdmv_submission_date"][:2]=="11":
         print "Very old request "+req_name
@@ -973,6 +1089,12 @@ def parallel_test(arguments,force=False):
     if 'pdmv_dataset_name' in pdmv_request_dict and (pdmv_request_dict["pdmv_dataset_name"] in ['?','None Yet'] or 'None-' in pdmv_request_dict["pdmv_dataset_name"] or '24Aug2012' in pdmv_request_dict["pdmv_dataset_name"]):
       makedsnquery=True
 
+    if req_status in priority_changable_stati:
+      makedsnquery=False
+      
+    if force:
+      makedsnquery=True
+      
     #print makedsnquery
     try:
       if makedsnquery:
@@ -1011,11 +1133,13 @@ def parallel_test(arguments,force=False):
       print "\tSumming for",req_name
       status,evts,openN=get_status_nevts_from_dbs(pdmv_request_dict["pdmv_dataset_name"])
       if status:
+        print "\t\tUpdating %s %s %s"%( status,evts,openN )
         pdmv_request_dict["pdmv_status_in_DAS"]=status
         pdmv_request_dict["pdmv_evts_in_DAS"]=evts
         pdmv_request_dict["pdmv_open_evts_in_DAS"]=openN
         ## add this only when the summing is done
       else:
+        print "\t\tPassed %s %s %s"%( status,evts,openN )
         pass
       pdmv_request_dict["pdmv_monitor_time"]=time.asctime()
     else:
@@ -1030,14 +1154,16 @@ def parallel_test(arguments,force=False):
 
 
     if not 'pdmv_expected_events' in pdmv_request_dict:
-      pdmv_request_dict['pdmv_expected_events']=0
+      pdmv_request_dict['pdmv_expected_events']=-1
 
     ## why having "expected events" not calculated if the output dataset has no status yet ?
     #to prevent stupid update from garbage requests announced or skewed but enrecoverable
     ##if ((pdmv_request_dict["pdmv_expected_events"]<0) or skewed) and pdmv_request_dict['pdmv_status_in_DAS']:
-    if pdmv_request_dict["pdmv_expected_events"]<=0 or (skewed and pdmv_request_dict['pdmv_status_in_DAS'] and not pdmv_request_dict['pdmv_status_in_DAS'] in ['DELETED','DEPRECATED'] and pdmv_request_dict["pdmv_expected_events"]<0):
-    #if ((pdmv_request_dict["pdmv_expected_events"]<0) and pdmv_request_dict['pdmv_status_in_DAS']) or force:
-    #if pdmv_request_dict["pdmv_expected_events"]<0: ## this will trigger a lot of queries on fuck up requests
+    if pdmv_request_dict["pdmv_expected_events"]<0 or (skewed and pdmv_request_dict['pdmv_status_in_DAS'] and not pdmv_request_dict['pdmv_status_in_DAS'] in ['DELETED','DEPRECATED'] and pdmv_request_dict["pdmv_expected_events"]<0) or force:
+      print "Getting expected events"
+      ## JR on Sept 25 removed <=0
+      #if ((pdmv_request_dict["pdmv_expected_events"]<0) and pdmv_request_dict['pdmv_status_in_DAS']) or force:
+      #if pdmv_request_dict["pdmv_expected_events"]<0: ## this will trigger a lot of queries on fuck up requests
 
       if not dict_from_workload: dict_from_workload=getDictFromWorkload(req_name)
       if not dict_from_workload: return {}
