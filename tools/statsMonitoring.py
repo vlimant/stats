@@ -40,8 +40,12 @@ import itertools
 import random
 import json
 
-sys.path.append('/afs/cern.ch/user/v/vlimant/PdmV/tools/prod/devel')
 from phedex import phedex,runningSites,custodials,atT2,atT3
+
+#if DAS command line interface doesn't exists -> download it
+if not os.path.isfile('das_client.py'):
+    import subprocess
+    subprocess.call(["curl", "https://cmsweb.cern.ch/das/cli", "--insecure", "-o", "das_client.py"])
 
 # Collect all the requests which are in one of these stati which allow for 
 priority_changable_stati=['new','assignment-approved']
@@ -358,34 +362,42 @@ def get_expected_events_withinput(
             #s+=eval(os.popen('dbs search --production --noheader  --query  "find sum(file.numevents) where dataset = %s and (%s)"'%(d,rwlfordbs)).read())
             #make sure this is going to be viable
             try:
-              blocks = dbsapi.listBlocks(str(d))
+                print "$sss %s"%(d)
+                #blocks = dbsapi.listBlocks(str(d)) #old
+                comm = './das_client.py --query="block dataset=%s" --format=json --das-headers'%(dataset)
+                data = commands.getoutput(comm)
+                blocks = json.loads(data)["data"]
             except:
-              print d,"does not exist, and therefore we cannot get expected events from it"
-              blocks=None
+                print d,"does not exist, and therefore we cannot get expected events from it"
+                blocks = None
 
             if blocks:
               for run in rwl:
-                q='dbs search --production --noheader  --query  "find sum(file.numevents) where dataset = %s and (run=%s)" '%(d,run)
-                #print q
+                #q='dbs search --production --noheader  --query  "find sum(file.numevents) where dataset = %s and (run=%s)" '%(d,run)
+                q = './das_client.py --query="file dataset=%s run=%s | sum(file.nevents)" --format=json --das-headers' %(d,run)
+                result = commands.getoutput(q)
+                data = json.loads(result)
                 try:
-                  s+=eval(os.popen(q).read())
+                  #s+=eval(os.popen(q).read())
+                  s += int(data["data"]["result"]["value"])
                 except:
                   print d,"does not have event for",run
                   #import traceback
                   #print traceback.format_exc()
           else:
-            blocks = dbsapi.listBlocks(str(d))
+            #blocks = dbsapi.listBlocks(str(d)) #old
+            comm = './das_client.py --query="block dataset=%s" --format=json --das-headers'%(d)
+            data = commands.getoutput(comm)
+            blocks = json.loads(data)["data"]
             if len(bwl):
-              ##we have a block white list in input
-              for b in bwl:
-                #print "summing for",b
-                if not '#' in b: continue
-                for bdbs in filter(lambda bl: bl['Name']==b, blocks):
-                  s+=bdbs['NumberOfEvents']
+                ##we have a block white list in input
+                for b in bwl:
+                    if not '#' in b: continue
+                    for bdbs in filter(lambda bl: bl["block"][0]["name"]==b, blocks):
+                        s += bdbs['nevents']
             else:
-              print "summing all blocks"
-              for bdbs in blocks:
-                s+=bdbs['NumberOfEvents']
+                for bdbs in blocks:
+                    s += bdbs["block"][0]["nevents"]
         return s*filter_eff
       
         #work from input dbs and block white list
@@ -396,7 +408,11 @@ def get_expected_events_withinput(
                 if not '#' in b: #a block whitelist needs that
                   continue
                 try:
-                    s+=eval(os.popen('dbs search --production --noheader  --query  "find block.numevents where block = %s"'%(b)).readline())
+                    #print "###: dbs search --production --noheader  --query  find block.numevents where block = %s"%(b)
+                    #s+=eval(os.popen('dbs search --production --noheader  --query  "find block.numevents where block = %s"'%(b)).readline())
+                    q = './das_client.py --query="block block=%s | grep block.nevents" --format=json --das-headers'%(b)
+                    result = commands.getoutput(q)
+                    data = json.loads(result)
                 except:
                     print b,'does not have events'
             return s*filter_eff
@@ -405,7 +421,11 @@ def get_expected_events_withinput(
             #print "from ds list"
             for d in ids:
                 try:
-                    s+=eval(os.popen('dbs search --production --noheader  --query  "find sum(block.numevents) where dataset = %s"'%(d)).readline())
+                    #s+=eval(os.popen('dbs search --production --noheader  --query  "find sum(block.numevents) where dataset = %s"'%(d)).readline())
+                    q = '/das_client.py --query="block dataset=%s | sum(block.nevents)" --format=json --das-headers'%(d)
+                    result = commands.getoutput(q)
+                    data = json.loads(result)
+                    s += data["data"]["result"]["value"]
                 except:
                     print d,"does not have events"
             return s*filter_eff
@@ -645,8 +665,16 @@ def get_status_nevts_from_dbs(dataset):
   #print "executed %s and found %s events" %(dbs_command ,total_evts)
   """
   
-  getstatus='dbs search --production --noheader --query "find dataset.status where dataset = %s"'%dataset
-  status=commands.getoutput(getstatus)
+  #getstatus='dbs search --production --noheader --query "find dataset.status where dataset = %s"'%dataset
+  getstatus = './das_client.py --query="status dataset=%s" --format=json --das-headers'%(dataset)
+  result = json.loads(commands.getoutput(getstatus))
+  try:
+    status = str(result["data"][0]["status"][0]["name"])
+  except:
+    print "Das glitch on status retrieval for",dataset
+    print result
+    return undefined
+
   if not status:
     status=None
 

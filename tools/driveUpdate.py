@@ -9,6 +9,7 @@ import copy
 import optparse
 import time
 import traceback
+import os
 
 FORCE=False
 
@@ -347,9 +348,14 @@ def main_do( options ):
             try:
                 withRevisions=statsCouch.get_file_info_withrev(r)
                 plotGrowth(withRevisions,statsCouch,force=FORCE)
+                ## notify McM for update !!
+                inspect='curl -s -k --cookie ~/private/prod-cookie.txt https://cms-pdmv.cern.ch/mcm/restapi/requests/inspect/%s' % withRevisions['pdmv_prep_id']
+                #print inspect
+                os.system(inspect)
             except:
                 print "failed to update growth for",r
                 print traceback.format_exc()
+
 
         print "\n\n"
         ## set in the log file
