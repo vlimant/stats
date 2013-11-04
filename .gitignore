@@ -1,0 +1,7 @@
+#Compiled source code #
+######################
+*.pyc
+
+#File copies#
+############
+*.*~
