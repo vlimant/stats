@@ -45,7 +45,10 @@ from phedex import phedex,runningSites,custodials,atT2,atT3
 #if DAS command line interface doesn't exists -> download it
 if not os.path.isfile('das_client.py'):
     import subprocess
-    subprocess.call(["curl", "https://cmsweb.cern.ch/das/cli", "--insecure", "-o", "das_client.py"])
+    ret_code = subprocess.call(["curl", "https://cmsweb.cern.ch/das/cli", "--insecure", "-o", "das_client.py"])
+    if ret_code != 0:
+        print "there was a problem download DAS cli file"
+        sys.exit(1)
 
 # Collect all the requests which are in one of these stati which allow for 
 priority_changable_stati=['new','assignment-approved']
@@ -271,6 +274,27 @@ def get_dataset_name(reqname):
 #-------------------------------------------------------------------------------
 # Thanks to Jean-Roch
 
+def configsFromWorkload( workload ):
+  if not 'request' in workload:
+    return []
+  if not 'schema' in workload['request']:
+    return []
+  schema = workload['request']['schema']
+  res=[]
+  if schema['RequestType'] == 'TaskChain':
+    i=1
+    while True:
+      t='Task%s'%i
+      if t not in schema:
+        break
+      if not 'ConfigCacheID' in schema[t]:
+        break
+      res.append(schema[t]['ConfigCacheID'])
+      i+=1
+    else:
+      pass
+
+  return res
 
 def get_expected_events(request_name):
     workload_info=generic_get(request_detail_address+request_name, False)
@@ -353,8 +377,8 @@ def get_expected_events_withinput(
     #wrap up
     if rne=='None' or rne==None or rne==0:
 
-        from DBSAPI.dbsApi import DbsApi
-        dbsapi = DbsApi()
+        #from DBSAPI.dbsApi import DbsApi
+        #dbsapi = DbsApi()
         s=0.
         for d in ids:
           if len(rwl):
@@ -364,7 +388,7 @@ def get_expected_events_withinput(
             try:
                 print "$sss %s"%(d)
                 #blocks = dbsapi.listBlocks(str(d)) #old
-                comm = './das_client.py --query="block dataset=%s" --format=json --das-headers'%(dataset)
+                comm = './das_client.py --query="block dataset=%s" --format=json --das-headers --limit=0'%(dataset)
                 data = commands.getoutput(comm)
                 blocks = json.loads(data)["data"]
             except:
@@ -374,7 +398,7 @@ def get_expected_events_withinput(
             if blocks:
               for run in rwl:
                 #q='dbs search --production --noheader  --query  "find sum(file.numevents) where dataset = %s and (run=%s)" '%(d,run)
-                q = './das_client.py --query="file dataset=%s run=%s | sum(file.nevents)" --format=json --das-headers' %(d,run)
+                q = './das_client.py --query="file dataset=%s run=%s | sum(file.nevents)" --format=json --das-headers --limit=0' %(d,run)
                 result = commands.getoutput(q)
                 data = json.loads(result)
                 try:
@@ -386,7 +410,7 @@ def get_expected_events_withinput(
                   #print traceback.format_exc()
           else:
             #blocks = dbsapi.listBlocks(str(d)) #old
-            comm = './das_client.py --query="block dataset=%s" --format=json --das-headers'%(d)
+            comm = './das_client.py --query="block dataset=%s" --format=json --das-headers --limit=0'%(d)
             data = commands.getoutput(comm)
             blocks = json.loads(data)["data"]
             if len(bwl):
@@ -394,7 +418,7 @@ def get_expected_events_withinput(
                 for b in bwl:
                     if not '#' in b: continue
                     for bdbs in filter(lambda bl: bl["block"][0]["name"]==b, blocks):
-                        s += bdbs['nevents']
+                        s += bdbs["block"][0]["nevents"] #because [1] is about replica of block???
             else:
                 for bdbs in blocks:
                     s += bdbs["block"][0]["nevents"]
@@ -410,9 +434,10 @@ def get_expected_events_withinput(
                 try:
                     #print "###: dbs search --production --noheader  --query  find block.numevents where block = %s"%(b)
                     #s+=eval(os.popen('dbs search --production --noheader  --query  "find block.numevents where block = %s"'%(b)).readline())
-                    q = './das_client.py --query="block block=%s | grep block.nevents" --format=json --das-headers'%(b)
+                    q = './das_client.py --query="block block=%s | grep block.nevents" --format=json --das-headers --limit=0'%(b)
                     result = commands.getoutput(q)
                     data = json.loads(result)
+                    s += data["data"]["result"]["value"]
                 except:
                     print b,'does not have events'
             return s*filter_eff
@@ -422,7 +447,7 @@ def get_expected_events_withinput(
             for d in ids:
                 try:
                     #s+=eval(os.popen('dbs search --production --noheader  --query  "find sum(block.numevents) where dataset = %s"'%(d)).readline())
-                    q = '/das_client.py --query="block dataset=%s | sum(block.nevents)" --format=json --das-headers'%(d)
+                    q = './das_client.py --query="block dataset=%s | sum(block.nevents)" --format=json --das-headers --limit=0'%(d)
                     result = commands.getoutput(q)
                     data = json.loads(result)
                     s += data["data"]["result"]["value"]
@@ -604,12 +629,15 @@ def get_status_nevts_from_dbs(dataset):
   total_open=0
 
   if debug:    print "load"
-  from DBSAPI.dbsApi import DbsApi
+  #from DBSAPI.dbsApi import DbsApi
+  #dbsapi = DbsApi()
   if debug:    print "instance"
-  dbsapi = DbsApi()
   if debug:    print "blocks"
   try:
-    blocks = dbsapi.listBlocks(str(dataset))
+    #blocks = dbsapi.listBlocks(str(dataset))
+    comm = './das_client.py --query="block dataset=%s" --format=json --das-headers --limit=0'%(dataset)
+    data = commands.getoutput(comm)
+    blocks = json.loads(data)
   except:
     print "Failed to get blocks for --",dataset,"--"
     import traceback
@@ -617,12 +645,16 @@ def get_status_nevts_from_dbs(dataset):
     blocks = []
     return undefined
 
-  for b in blocks:
+  for b in blocks["data"]:
     if debug:    print b
-    if b['OpenForWriting'] == '0':
-      total_evts+=int(b['NumberOfEvents'])
-    elif b['OpenForWriting'] == '1':
-      total_open+=int(b['NumberOfEvents'])
+    #if b['OpenForWriting'] == '0':
+    #  total_evts+=int(b['NumberOfEvents'])
+    #elif b['OpenForWriting'] == '1':
+    #  total_open+=int(b['NumberOfEvents'])
+    if b["block"][0]["open_for_writing"] == 0: #lame DAS format: block info in a single object in list
+        total_evts+=b["block"][0]["nevents"]
+    elif b["block"][0]["open_for_writing"] == 1:
+        total_evts+=b["block"][0]["nevents"]
   if debug:    print "done"
   
   """
@@ -666,7 +698,7 @@ def get_status_nevts_from_dbs(dataset):
   """
   
   #getstatus='dbs search --production --noheader --query "find dataset.status where dataset = %s"'%dataset
-  getstatus = './das_client.py --query="status dataset=%s" --format=json --das-headers'%(dataset)
+  getstatus = './das_client.py --query="status dataset=%s" --format=json --das-headers --limit=0'%(dataset)
   result = json.loads(commands.getoutput(getstatus))
   try:
     status = str(result["data"][0]["status"][0]["name"])
@@ -973,6 +1005,10 @@ def parallel_test(arguments,force=False):
     else:
       print "Processing",req_name
 
+    if not 'pdmv_configs' in pdmv_request_dict or pdmv_request_dict['pdmv_configs'] ==[] :
+      if not dict_from_workload: dict_from_workload=getDictFromWorkload(req_name)
+      if not dict_from_workload: return {}
+      pdmv_request_dict['pdmv_configs'] = configsFromWorkload( dict_from_workload )
 
     #dict_from_workload=getDictFromWorkload(req_name)
     #if not dict_from_workload:      return {}
@@ -1032,7 +1068,13 @@ def parallel_test(arguments,force=False):
     raw_expected_evts=None
     priority=-1
     # assign the campaign and the prepid guessing from the string, then try to get it from the extras
-    prep_id=get_prep_id(req)
+    if not dict_from_workload: dict_from_workload=getDictFromWorkload(req_name)
+    if not dict_from_workload: return {}
+    if 'PrepID' in dict_from_workload['request']['schema']:
+      prep_id = dict_from_workload['request']['schema']['PrepID']
+    else:
+      prep_id='No-Prepid-Found'
+    #prep_id=get_prep_id(req)
     pdmv_request_dict["pdmv_prep_id"]=prep_id
     campaign=get_campaign_from_prepid(prep_id)
     pdmv_request_dict["pdmv_campaign"]=campaign    
@@ -1305,7 +1347,8 @@ def parallel_test(arguments,force=False):
     ## try to get info of a know request, just to fail on certificat for real, outside the try...
     ##if that fails, it's because of server or certificate, and will make the whole thing fail, rather than going on quietly
     from TransformRequestIntoDict import TransformRequestIntoDict
-    dict_from_workload=TransformRequestIntoDict( 'etorassa_EXO-Summer12_DR52X-00109_T1_US_FNAL_MSS_batch15_v1__120426_182026_2934' , ['request'], True )
+    #dict_from_workload=TransformRequestIntoDict( 'etorassa_EXO-Summer12_DR52X-00109_T1_US_FNAL_MSS_batch15_v1__120426_182026_2934' , ['request'], True )
+    dict_from_workload=TransformRequestIntoDict( 'pdmvserv_HIG-Summer11pLHE-00079_00009_v0_STEP0ATCERN_131205_120245_8592' , ['request'], True )
     
     return {}
 

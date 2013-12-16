@@ -52,3 +52,16 @@ class Interface(object):
         request.get_method = lambda: 'POST'
         url = self.opener.open(request)
         return json.loads(url.read())
+
+    def get_view(self, view, params=None):
+
+        if params:
+            url = self.url_address+'/_design/stats/_view/'+view+params
+        else:
+            url = self.url_address+'/_design/stats/_view/'+view
+        print url
+        request = urllib2.Request(url)
+        request.add_header('Content-Type', 'text/plain')
+        request.get_method = lambda: 'GET'
+        url = self.opener.open(request)
+        return json.loads(url.read())

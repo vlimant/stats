@@ -199,17 +199,21 @@ def main():
     parser.add_option("--force",
                       default=False,
                       action='store_true'
-                      )    
+                      )
+    parser.add_option("--inspect",
+                      default=False,
+                      action='store_true'
+                      )
     parser.add_option("--do",
                       choices=['update','insert','store','kill','list'],
                       )
     parser.add_option("--db",
                       default="http://cms-pdmv-stats.cern.ch")
-    
+
     options,args=parser.parse_args()
 
     main_do( options )
-    
+
 def main_do( options ):
     global statsCouch,docs,FORCE
     #interface to the couchDB
@@ -258,7 +262,7 @@ def main_do( options ):
         #print len(req_list)
             
         #do not update TaskChain request statuses
-        req_list = filter( lambda req : 'type' in req and req['type']!='TaskChain', req_list)
+        #req_list = filter( lambda req : 'type' in req and req['type']!='TaskChain', req_list)
         #print len(req_list)
 
         pprint.pprint( req_list)
@@ -349,9 +353,9 @@ def main_do( options ):
                 withRevisions=statsCouch.get_file_info_withrev(r)
                 plotGrowth(withRevisions,statsCouch,force=FORCE)
                 ## notify McM for update !!
-                inspect='curl -s -k --cookie ~/private/prod-cookie.txt https://cms-pdmv.cern.ch/mcm/restapi/requests/inspect/%s' % withRevisions['pdmv_prep_id']
-                #print inspect
-                os.system(inspect)
+                if (withRevisions['pdmv_prep_id'] not in ['No-Prepid-Found','']) and options.inspect:
+                    inspect='curl -s -k --cookie ~/private/prod-cookie.txt https://cms-pdmv.cern.ch/mcm/restapi/requests/inspect/%s' % withRevisions['pdmv_prep_id']
+                    os.system(inspect)
             except:
                 print "failed to update growth for",r
                 print traceback.format_exc()
