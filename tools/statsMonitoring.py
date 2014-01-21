@@ -11,6 +11,7 @@ request_detail_address="https://cmsweb.cern.ch/reqmgr/view/showWorkload?requestN
 #das_host = 'https://cmsweb.cern.ch'
 das_host = 'https://das.cern.ch/das'
 runStats_address = 'https://cmsweb.cern.ch/couchdb/workloadsummary/_design/WorkloadSummary/_show/histogramByWorkflow/'
+dbs3_url = 'https://cmsweb.cern.ch/dbs/prod/global/DBSReader/'
 
 
 #-------------------------------------------------------------------------------
@@ -78,101 +79,111 @@ wma2reason = {'success':'success', # wma2reason by vincenzo spinoso!
 # Needed for authentication
 
 class X509CertAuth(httplib.HTTPSConnection):
-  '''Class to authenticate via Grid Certificate'''
-  def __init__(self, host, *args, **kwargs):
-    key_file = None
-    cert_file = None
-
-    x509_path = os.getenv("X509_USER_PROXY", None)
-    if x509_path and os.path.exists(x509_path):
-      key_file = cert_file = x509_path
-
-    if not key_file:
-      x509_path = os.getenv("X509_USER_KEY", None)
+    '''Class to authenticate via Grid Certificate'''
+    def __init__(self, host, *args, **kwargs):
+      key_file = None
+      cert_file = None
+  
+      x509_path = os.getenv("X509_USER_PROXY", None)
       if x509_path and os.path.exists(x509_path):
-        key_file = x509_path
-
-    if not cert_file:
-      x509_path = os.getenv("X509_USER_CERT", None)
-      if x509_path and os.path.exists(x509_path):
-        cert_file = x509_path
-
-    if not key_file:
-      x509_path = os.getenv("HOME") + "/.globus/userkey.pem"
-      if os.path.exists(x509_path):
-        key_file = x509_path
-
-    if not cert_file:
-      x509_path = os.getenv("HOME") + "/.globus/usercert.pem"
-      if os.path.exists(x509_path):
-        cert_file = x509_path
-
-    if not key_file or not os.path.exists(key_file):
-      print >>stderr, "No certificate private key file found"
-      exit(1)
-
-    if not cert_file or not os.path.exists(cert_file):
-      print >>stderr, "No certificate public key file found"
-      exit(1)
-
-    httplib.HTTPSConnection.__init__(self,  host,key_file = key_file,cert_file = cert_file,**kwargs)
+        key_file = cert_file = x509_path
+  
+      if not key_file:
+        x509_path = os.getenv("X509_USER_KEY", None)
+        if x509_path and os.path.exists(x509_path):
+          key_file = x509_path
+  
+      if not cert_file:
+        x509_path = os.getenv("X509_USER_CERT", None)
+        if x509_path and os.path.exists(x509_path):
+          cert_file = x509_path
+  
+      if not key_file:
+        x509_path = os.getenv("HOME") + "/.globus/userkey.pem"
+        if os.path.exists(x509_path):
+          key_file = x509_path
+  
+      if not cert_file:
+        x509_path = os.getenv("HOME") + "/.globus/usercert.pem"
+        if os.path.exists(x509_path):
+          cert_file = x509_path
+  
+      if not key_file or not os.path.exists(key_file):
+        print >>stderr, "No certificate private key file found"
+        exit(1)
+  
+      if not cert_file or not os.path.exists(cert_file):
+        print >>stderr, "No certificate public key file found"
+        exit(1)
+  
+      httplib.HTTPSConnection.__init__(self,  host,key_file = key_file,cert_file = cert_file,**kwargs)
 
 #-------------------------------------------------------------------------------
 
 class X509CertOpen(urllib2.AbstractHTTPHandler):
-  def default_open(self, req):
-    return self.do_open(X509CertAuth, req)
+    def default_open(self, req):
+      return self.do_open(X509CertAuth, req)
 
 #-------------------------------------------------------------------------------
 def eval_wma_string(string):
-  string=string.replace("null",'None')
-  string=string.replace("true","True")
-  string=string.replace("false","False")
-  return eval(string)
+    string=string.replace("null",'None')
+    string=string.replace("true","True")
+    string=string.replace("false","False")
+    return eval(string)
 
 #-------------------------------------------------------------------------------
 
 def generic_get(url,do_eval=True):
-  opener=urllib2.build_opener(X509CertOpen())  
-  datareq = urllib2.Request(url)
-  datareq.add_header('authenticated_wget', "The ultimate wgetter")  
-#  print "Getting material from %s..." %url,
-  requests_list_str=opener.open(datareq).read()  
-  
-  ret_val=requests_list_str
-  #print requests_list_str
-  if do_eval:
-    ret_val=eval_wma_string(requests_list_str)
-  return ret_val
-  
+    opener=urllib2.build_opener(X509CertOpen())  
+    datareq = urllib2.Request(url)
+    datareq.add_header('authenticated_wget', "The ultimate wgetter")  
+#   print "Getting material from %s..." %url,
+    requests_list_str=opener.open(datareq).read()  
+
+    ret_val=requests_list_str
+    #print requests_list_str
+    if do_eval:
+        ret_val=eval_wma_string(requests_list_str)
+    return ret_val
+#-------------------------------------------------------------------------------
+
+def generic_post(url, data_input):
+
+    data = json.dumps(data_input)
+    opener = urllib2.build_opener(X509CertOpen())
+    datareq = urllib2.Request(url, data, {"Content-type" : "application/json"})
+    requests_list_str = opener.open(datareq).read()
+    ret_val = requests_list_str
+
+    return ret_val
 #-------------------------------------------------------------------------------
 
 def get_requests_list(pattern=""):
-  opener=urllib2.build_opener(X509CertOpen())  
-  url="https://cmsweb.cern.ch/wmstats/_design/WMStats/_view/requestByStatusAndType?stale=update_after"
-  datareq = urllib2.Request(url)
-  datareq.add_header('authenticated_wget', "The ultimate wgetter")  
-  print "Getting the list of requests from %s..." %url,
-  requests_list_str=opener.open(datareq).read()  
-  print " Got it in %s Bytes"%len(requests_list_str)
-  data = json.loads( requests_list_str )
-  ## build backward compatibility
-  req_list= map( lambda item : {"request_name" : item[0], "status" : item[1], "type" :item[2]}, map(lambda r : r['key'] , data['rows']))
-
-  return req_list
+    opener=urllib2.build_opener(X509CertOpen())  
+    url="https://cmsweb.cern.ch/wmstats/_design/WMStats/_view/requestByStatusAndType?stale=update_after"
+    datareq = urllib2.Request(url)
+    datareq.add_header('authenticated_wget', "The ultimate wgetter")  
+    print "Getting the list of requests from %s..." %url,
+    requests_list_str=opener.open(datareq).read()  
+    print " Got it in %s Bytes"%len(requests_list_str)
+    data = json.loads( requests_list_str )
+    ## build backward compatibility
+    req_list= map( lambda item : {"request_name" : item[0], "status" : item[1], "type" :item[2]}, map(lambda r : r['key'] , data['rows']))
+  
+    return req_list
 
 def get_requests_list_old(pattern=""):
-  opener=urllib2.build_opener(X509CertOpen())  
-  url="%srequestmonitor"%gm_address
-  if pattern!="":
-    url="%srequests?name=%s" %(gm_address,pattern)
-  datareq = urllib2.Request(url)
-  datareq.add_header('authenticated_wget', "The ultimate wgetter")  
-  print "Getting the list of requests from %s..." %url,
-  requests_list_str=opener.open(datareq).read()  
-  print " Got it in %s Bytes"%len(requests_list_str)
-
-  return eval_wma_string(requests_list_str)
+    opener=urllib2.build_opener(X509CertOpen())  
+    url="%srequestmonitor"%gm_address
+    if pattern!="":
+      url="%srequests?name=%s" %(gm_address,pattern)
+    datareq = urllib2.Request(url)
+    datareq.add_header('authenticated_wget', "The ultimate wgetter")  
+    print "Getting the list of requests from %s..." %url,
+    requests_list_str=opener.open(datareq).read()  
+    print " Got it in %s Bytes"%len(requests_list_str)
+  
+    return eval_wma_string(requests_list_str)
 
 #------------------------------------------------------------------------------- 
 
@@ -234,7 +245,10 @@ def get_dataset_name(reqname):
       return decision*2 -1
                                                                                                                                                   
   dataset_list.sort(cmp=compareDS)
-  dataset=dataset_list[0]
+  if len(dataset_list)==0:
+    dataset='None Yet'
+  else:
+    dataset=dataset_list[0]
   if 'None-None' in dataset or 'None-' in dataset:
     dataset='None Yet'
   return dataset,dataset_list
@@ -388,9 +402,11 @@ def get_expected_events_withinput(
             try:
                 print "$sss %s"%(d)
                 #blocks = dbsapi.listBlocks(str(d)) #old
-                comm = './das_client.py --query="block dataset=%s" --format=json --das-headers --limit=0'%(dataset)
-                data = commands.getoutput(comm)
-                blocks = json.loads(data)["data"]
+                #comm = './das_client.py --query="block dataset=%s" --format=json --das-headers --limit=0'%(dataset)
+                #data = commands.getoutput(comm)
+                #blocks = json.loads(data)["data"]
+                ret = generic_get(dbs3_url+"blocks?dataset=%s" %(d)) #returns blocks names
+                blocks= json.loads(ret)
             except:
                 print d,"does not exist, and therefore we cannot get expected events from it"
                 blocks = None
@@ -398,30 +414,35 @@ def get_expected_events_withinput(
             if blocks:
               for run in rwl:
                 #q='dbs search --production --noheader  --query  "find sum(file.numevents) where dataset = %s and (run=%s)" '%(d,run)
-                q = './das_client.py --query="file dataset=%s run=%s | sum(file.nevents)" --format=json --das-headers --limit=0' %(d,run)
-                result = commands.getoutput(q)
+                #q = './das_client.py --query="file dataset=%s run=%s | sum(file.nevents)" --format=json --das-headers --limit=0' %(d,run)
+                #result = commands.getoutput(q)
+                ret = generic_get(dbs3_url+"filesummaries?dataset=%s&run_num=%s" %(d, run)) #returns blocks names
                 data = json.loads(result)
                 try:
                   #s+=eval(os.popen(q).read())
-                  s += int(data["data"]["result"]["value"])
+                  #s += int(data["data"]["result"]["value"])
+                  s += int(data[0]["num_event"]
                 except:
                   print d,"does not have event for",run
                   #import traceback
                   #print traceback.format_exc()
           else:
             #blocks = dbsapi.listBlocks(str(d)) #old
-            comm = './das_client.py --query="block dataset=%s" --format=json --das-headers --limit=0'%(d)
-            data = commands.getoutput(comm)
-            blocks = json.loads(data)["data"]
+            #comm = './das_client.py --query="block dataset=%s" --format=json --das-headers --limit=0'%(d)
+            #data = commands.getoutput(comm)
+            ret = generic_get(dbs3_url+"blocks?dataset=%s" %(d)) #returns blocks names ????
+            blocks = json.loads(data)
             if len(bwl):
                 ##we have a block white list in input
                 for b in bwl:
                     if not '#' in b: continue
-                    for bdbs in filter(lambda bl: bl["block"][0]["name"]==b, blocks):
-                        s += bdbs["block"][0]["nevents"] #because [1] is about replica of block???
+                    for bdbs in filter(lambda bl: bl["block_name"]==b, blocks):
+                        block_data = json.loads(generic_get(dbs3_url+"blocksummaries?block_name=%s" %(bdbs["block_name"].replace("#","%23")))) #encode # to HTML URL
+                        s += block_data[0]["num_event"] #because [1] is about replica of block???
             else:
                 for bdbs in blocks:
-                    s += bdbs["block"][0]["nevents"]
+                    block_data = json.loads(generic_get(dbs3_url+"blocksummaries?block_name=%s" %(bdbs["block_name"].replace("#","%23")))) #encode # to HTML URL
+                    s += block_data[0]["num_event"]
         return s*filter_eff
       
         #work from input dbs and block white list
@@ -434,10 +455,11 @@ def get_expected_events_withinput(
                 try:
                     #print "###: dbs search --production --noheader  --query  find block.numevents where block = %s"%(b)
                     #s+=eval(os.popen('dbs search --production --noheader  --query  "find block.numevents where block = %s"'%(b)).readline())
-                    q = './das_client.py --query="block block=%s | grep block.nevents" --format=json --das-headers --limit=0'%(b)
-                    result = commands.getoutput(q)
-                    data = json.loads(result)
-                    s += data["data"]["result"]["value"]
+                    #q = './das_client.py --query="block block=%s | grep block.nevents" --format=json --das-headers --limit=0'%(b)
+                    #result = commands.getoutput(q)
+                    ret = json.loads(generic_get(dbs3_url+"blocksummaries?block_name=%s" %(b.replace("#","%23")))) #encode # to HTML URL
+                    data = json.loads(ret)
+                    s += data[0]["num_event"]
                 except:
                     print b,'does not have events'
             return s*filter_eff
@@ -447,10 +469,11 @@ def get_expected_events_withinput(
             for d in ids:
                 try:
                     #s+=eval(os.popen('dbs search --production --noheader  --query  "find sum(block.numevents) where dataset = %s"'%(d)).readline())
-                    q = './das_client.py --query="block dataset=%s | sum(block.nevents)" --format=json --das-headers --limit=0'%(d)
-                    result = commands.getoutput(q)
-                    data = json.loads(result)
-                    s += data["data"]["result"]["value"]
+                    #q = './das_client.py --query="block dataset=%s | sum(block.nevents)" --format=json --das-headers --limit=0'%(d)
+                    #result = commands.getoutput(q)
+                    ret = json.loads(generic_get(dbs3_url+"blocksummaries?dataset=%s" %(d)))
+                    data = json.loads(ret)
+                    s += data[0]["num_event"]
                 except:
                     print d,"does not have events"
             return s*filter_eff
@@ -623,6 +646,9 @@ def get_status_nevts_from_dbs(dataset):
   debug=False
   if dataset=='None Yet':
     return undefined
+  if dataset=='?':
+    return undefined
+  
   if debug : print "Querying DBS"
 
   total_evts=0
@@ -635,8 +661,9 @@ def get_status_nevts_from_dbs(dataset):
   if debug:    print "blocks"
   try:
     #blocks = dbsapi.listBlocks(str(dataset))
-    comm = './das_client.py --query="block dataset=%s" --format=json --das-headers --limit=0'%(dataset)
-    data = commands.getoutput(comm)
+    #comm = './das_client.py --query="block dataset=%s" --format=json --das-headers --limit=0'%(dataset)
+    #data = commands.getoutput(comm)
+    ret = generic_get(dbs3_url+"blocks?dataset=%s&detail=true" %(dataset))
     blocks = json.loads(data)
   except:
     print "Failed to get blocks for --",dataset,"--"
@@ -645,16 +672,22 @@ def get_status_nevts_from_dbs(dataset):
     blocks = []
     return undefined
 
-  for b in blocks["data"]:
+  for b in blocks:
     if debug:    print b
     #if b['OpenForWriting'] == '0':
     #  total_evts+=int(b['NumberOfEvents'])
     #elif b['OpenForWriting'] == '1':
     #  total_open+=int(b['NumberOfEvents'])
-    if b["block"][0]["open_for_writing"] == 0: #lame DAS format: block info in a single object in list
-        total_evts+=b["block"][0]["nevents"]
-    elif b["block"][0]["open_for_writing"] == 1:
-        total_evts+=b["block"][0]["nevents"]
+    #b["block"] = filter(lambda bd : not 'replica' in bd, b["block"])
+    #b["block"] = filter(lambda bd : 'nevents' in bd, b["block"])
+    if b["open_for_writing"] == 0: #lame DAS format: block info in a single object in list ????
+        ret = generic_get(dbs3_url+"blocksummaries?block_name=%s" %(b["block_name"].replace("#","%23")))
+        data = json.loads(ret)
+        total_evts+=data[0]["num_event"]
+    elif b["open_for_writing"] == 1:
+        ret = generic_get(dbs3_url+"blocksummaries?block_name=%s" %(b["block_name"].replace("#","%23")))
+        data = json.loads(ret)
+        total_open+=data[0]["num_event"]
   if debug:    print "done"
   
   """
@@ -698,14 +731,17 @@ def get_status_nevts_from_dbs(dataset):
   """
   
   #getstatus='dbs search --production --noheader --query "find dataset.status where dataset = %s"'%dataset
-  getstatus = './das_client.py --query="status dataset=%s" --format=json --das-headers --limit=0'%(dataset)
-  result = json.loads(commands.getoutput(getstatus))
+  #getstatus = './das_client.py --query="status dataset=%s" --format=json --das-headers --limit=0'%(dataset)
+  ret = generic_post(dbs3_url+"datasetlist", {"dataset":[dataset], "detail":True})
+  result = json.loads(ret)
   try:
-    status = str(result["data"][0]["status"][0]["name"])
+    status = str(result[0]["dataset_access_type"])
   except:
-    print "Das glitch on status retrieval for",dataset
-    print result
-    return undefined
+    raise Exception("  query:\n%s \n\n results:\n%s"%(getstatus, result))
+    #print "Das glitch on status retrieval for",dataset
+    #print "  query:\n%s"%(getstatus)
+    #print result
+    #return undefined
 
   if not status:
     status=None
@@ -916,6 +952,9 @@ def parallel_test(arguments,force=False):
       if 'pdmv_at_T2' in pdmv_request_dict and len(pdmv_request_dict['pdmv_at_T2']):
         noSites=False
       if 'pdmv_at_T3' in pdmv_request_dict and len(pdmv_request_dict['pdmv_at_T3']):
+        noSites=False
+
+      if not force:
         noSites=False
         
       if noSites and needsToBeUsed and (not 'pdmv_at_T2' in pdmv_request_dict or pdmv_request_dict['pdmv_at_T2']==[]):
@@ -1148,7 +1187,7 @@ def parallel_test(arguments,force=False):
     
     # Query yet another service to get the das entry of the prepid
     ## try and reduce the number of calls to get_dataset_name url
-    dataset_name="?"
+    dataset_name="None Yet"
     dataset_list=[]
     if 'pdmv_dataset_name' in pdmv_request_dict:
       dataset_name=pdmv_request_dict["pdmv_dataset_name"]

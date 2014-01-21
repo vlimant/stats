@@ -58,6 +58,13 @@ def worthTheUpdate(new,old):
         return True
     if old['pdmv_status_from_reqmngr']!=new['pdmv_status_from_reqmngr']:
         return True
+
+    if set(old['pdmv_at_T2'])!=set(new['pdmv_at_T2']):
+        return True
+
+    if set(old['pdmv_at_T3'])!=set(new['pdmv_at_T3']):
+        return True
+
     
     if old!=new:
 
@@ -209,7 +216,11 @@ def main():
                       )
     parser.add_option("--db",
                       default="http://cms-pdmv-stats.cern.ch")
-
+    parser.add_option("--mcm",
+                      default=False,
+                      help="drives the update from submitted requests in McM",
+                      action="store_true")
+    
     options,args=parser.parse_args()
 
     main_do( options )
@@ -318,6 +329,21 @@ def main_do( options ):
         
         ## unthreaded
         #updateSeveral(docs,req_list,pattern=None)
+
+        if options.mcm:
+            import sys
+            sys.path.append('/afs/cern.ch/cms/PPD/PdmV/tools/McM/')
+            from rest import restful
+            mcm = restful(dev=False,cookie='/afs/cern.ch/user/p/pdmvserv/private/prod-cookie.txt')
+            rs = mcm.getA('requests', query='status=submitted')
+            rids = map(lambda d : d['prepid'], rs)
+
+            print "Got",len(rids),"to update from mcm"
+            #print len(docs),len(req_list)
+            #print map( lambda docid : any( map(lambda rid : rid in doc, rids)), docs)
+            docs=filter( lambda docid : any( map(lambda rid : rid in docid, rids)), docs)
+            if not len(docs):
+                req_list=filter( lambda req : any( map(lambda rid : rid in req["request_name"], rids)), req_list)
 
         if options.search:
             if options.force:
