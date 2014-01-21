@@ -43,14 +43,6 @@ import json
 
 from phedex import phedex,runningSites,custodials,atT2,atT3
 
-#if DAS command line interface doesn't exists -> download it
-if not os.path.isfile('das_client.py'):
-    import subprocess
-    ret_code = subprocess.call(["curl", "https://cmsweb.cern.ch/das/cli", "--insecure", "-o", "das_client.py"])
-    if ret_code != 0:
-        print "there was a problem download DAS cli file"
-        sys.exit(1)
-
 # Collect all the requests which are in one of these stati which allow for 
 priority_changable_stati=['new','assignment-approved']
 #skippable_stati=[]
@@ -406,7 +398,7 @@ def get_expected_events_withinput(
                 #data = commands.getoutput(comm)
                 #blocks = json.loads(data)["data"]
                 ret = generic_get(dbs3_url+"blocks?dataset=%s" %(d)) #returns blocks names
-                blocks= json.loads(ret)
+                blocks= ret
             except:
                 print d,"does not exist, and therefore we cannot get expected events from it"
                 blocks = None
@@ -417,11 +409,11 @@ def get_expected_events_withinput(
                 #q = './das_client.py --query="file dataset=%s run=%s | sum(file.nevents)" --format=json --das-headers --limit=0' %(d,run)
                 #result = commands.getoutput(q)
                 ret = generic_get(dbs3_url+"filesummaries?dataset=%s&run_num=%s" %(d, run)) #returns blocks names
-                data = json.loads(result)
+                data = result
                 try:
                   #s+=eval(os.popen(q).read())
                   #s += int(data["data"]["result"]["value"])
-                  s += int(data[0]["num_event"]
+                  s += int(data[0]["num_event"])
                 except:
                   print d,"does not have event for",run
                   #import traceback
@@ -431,17 +423,17 @@ def get_expected_events_withinput(
             #comm = './das_client.py --query="block dataset=%s" --format=json --das-headers --limit=0'%(d)
             #data = commands.getoutput(comm)
             ret = generic_get(dbs3_url+"blocks?dataset=%s" %(d)) #returns blocks names ????
-            blocks = json.loads(data)
+            blocks = ret
             if len(bwl):
                 ##we have a block white list in input
                 for b in bwl:
                     if not '#' in b: continue
                     for bdbs in filter(lambda bl: bl["block_name"]==b, blocks):
-                        block_data = json.loads(generic_get(dbs3_url+"blocksummaries?block_name=%s" %(bdbs["block_name"].replace("#","%23")))) #encode # to HTML URL
+                        block_data = generic_get(dbs3_url+"blocksummaries?block_name=%s" %(bdbs["block_name"].replace("#","%23"))) #encode # to HTML URL
                         s += block_data[0]["num_event"] #because [1] is about replica of block???
             else:
                 for bdbs in blocks:
-                    block_data = json.loads(generic_get(dbs3_url+"blocksummaries?block_name=%s" %(bdbs["block_name"].replace("#","%23")))) #encode # to HTML URL
+                    block_data = generic_get(dbs3_url+"blocksummaries?block_name=%s" %(bdbs["block_name"].replace("#","%23"))) #encode # to HTML URL
                     s += block_data[0]["num_event"]
         return s*filter_eff
       
@@ -457,8 +449,8 @@ def get_expected_events_withinput(
                     #s+=eval(os.popen('dbs search --production --noheader  --query  "find block.numevents where block = %s"'%(b)).readline())
                     #q = './das_client.py --query="block block=%s | grep block.nevents" --format=json --das-headers --limit=0'%(b)
                     #result = commands.getoutput(q)
-                    ret = json.loads(generic_get(dbs3_url+"blocksummaries?block_name=%s" %(b.replace("#","%23")))) #encode # to HTML URL
-                    data = json.loads(ret)
+                    ret = generic_get(dbs3_url+"blocksummaries?block_name=%s" %(b.replace("#","%23"))) #encode # to HTML URL
+                    data = ret
                     s += data[0]["num_event"]
                 except:
                     print b,'does not have events'
@@ -471,8 +463,8 @@ def get_expected_events_withinput(
                     #s+=eval(os.popen('dbs search --production --noheader  --query  "find sum(block.numevents) where dataset = %s"'%(d)).readline())
                     #q = './das_client.py --query="block dataset=%s | sum(block.nevents)" --format=json --das-headers --limit=0'%(d)
                     #result = commands.getoutput(q)
-                    ret = json.loads(generic_get(dbs3_url+"blocksummaries?dataset=%s" %(d)))
-                    data = json.loads(ret)
+                    ret = generic_get(dbs3_url+"blocksummaries?dataset=%s" %(d))
+                    data = ret
                     s += data[0]["num_event"]
                 except:
                     print d,"does not have events"
@@ -664,7 +656,7 @@ def get_status_nevts_from_dbs(dataset):
     #comm = './das_client.py --query="block dataset=%s" --format=json --das-headers --limit=0'%(dataset)
     #data = commands.getoutput(comm)
     ret = generic_get(dbs3_url+"blocks?dataset=%s&detail=true" %(dataset))
-    blocks = json.loads(data)
+    blocks = ret
   except:
     print "Failed to get blocks for --",dataset,"--"
     import traceback
@@ -682,11 +674,11 @@ def get_status_nevts_from_dbs(dataset):
     #b["block"] = filter(lambda bd : 'nevents' in bd, b["block"])
     if b["open_for_writing"] == 0: #lame DAS format: block info in a single object in list ????
         ret = generic_get(dbs3_url+"blocksummaries?block_name=%s" %(b["block_name"].replace("#","%23")))
-        data = json.loads(ret)
+        data = ret
         total_evts+=data[0]["num_event"]
     elif b["open_for_writing"] == 1:
         ret = generic_get(dbs3_url+"blocksummaries?block_name=%s" %(b["block_name"].replace("#","%23")))
-        data = json.loads(ret)
+        data = ret
         total_open+=data[0]["num_event"]
   if debug:    print "done"
   
@@ -732,12 +724,16 @@ def get_status_nevts_from_dbs(dataset):
   
   #getstatus='dbs search --production --noheader --query "find dataset.status where dataset = %s"'%dataset
   #getstatus = './das_client.py --query="status dataset=%s" --format=json --das-headers --limit=0'%(dataset)
-  ret = generic_post(dbs3_url+"datasetlist", {"dataset":[dataset], "detail":True})
-  result = json.loads(ret)
   try:
-    status = str(result[0]["dataset_access_type"])
+    ret = generic_post(dbs3_url+"datasetlist", {"dataset":[dataset], "detail":True})
+    result = json.loads(ret) #post method return data as string so we must load it
+    if len(result) != 0 :
+        status = str(result[0]["dataset_access_type"])
+    else:
+        status=None
   except:
-    raise Exception("  query:\n%s \n\n results:\n%s"%(getstatus, result))
+    print "\n ERROR getting dataset status. return:%s"%(ret)
+    raise Exception("  datasetlist POST data:\n%s \n\n results:\n%s"%({"dataset":[dataset], "detail":True}, ret))
     #print "Das glitch on status retrieval for",dataset
     #print "  query:\n%s"%(getstatus)
     #print result
