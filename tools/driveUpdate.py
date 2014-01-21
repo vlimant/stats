@@ -226,6 +226,7 @@ def main():
     main_do( options )
 
 def main_do( options ):
+    start_time = time.asctime()
     global statsCouch,docs,FORCE
     #interface to the couchDB
     statsCouch=Interface(options.db+':5984/stats')
@@ -390,6 +391,7 @@ def main_do( options ):
         print "\n\n"
         ## set in the log file
         #serves as forceupdated !
+        print "start time: ", start_time
         print "logging updating time:",time.asctime()
         l=open('stats.log','a')
         l.write(time.asctime()+'\n')
