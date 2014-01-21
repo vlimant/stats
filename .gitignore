@@ -10,3 +10,16 @@
 #Log files#
 ##########
 *.log*
+
+#Acrontab scripts#
+#################
+*.sh*
+
+#DAS CLi file#
+#################
+*das_client.py*
+
+##untracked dirs#
+traceback/
+www
+das_client.py
