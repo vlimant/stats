@@ -808,7 +808,6 @@ class Initializer(object):
             jsonContent = map(lambda c: c['doc'], filter(lambda r : not r['id'].startswith('_'), data['rows'])) ##needs update
         i = 1
         while(i < len(jsonContent)):
-            print i
             Sim = Simulation()
             Sim._init_()
             Sim.Attributs["SIMID"] = i
