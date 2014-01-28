@@ -801,7 +801,7 @@ class Initializer(object):
             ### NEW super cool stuff
             ##go to view to get data with params!
             print "##DB_QUERY: %s" %(db_query)
-            dbData = urllib2.urlopen('http://pdmv:5984/stats/'+db_query)
+            dbData = urllib2.urlopen('http://cms-pdmv-stats:5984/stats/'+db_query)
             data = json.loads(dbData.read())
             n_results = data['total_rows']
             print "Found %s result(-s)"%(data['total_rows'])
