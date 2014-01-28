@@ -2,7 +2,6 @@ import json
 import time
 from operator import itemgetter
 import re
-import threading
 import urllib2
 
 class Simulation(object):    
@@ -130,15 +129,40 @@ class Simulation(object):
     #
     #Convert a rgb color in HEX value, useful for the Progress Bar Color
     def RGBtoHex(self, r, g, b):
-        return "#%02X%02X%02X" % (r, g, b)  
+        return "#%02X%02X%02X" % (r, g, b)
+
+class DBquery(object):
+    """
+    CouchDB-lucene query generator class
+    """
+    def __init__(self):
+        self.query = ""
+        self.__column_names = ["ID", "EE", "Ty", "SR", "Pr", "RJ", "RD", "EID", "RN", "SuD", "ED", "StD", "PI", "Ca", "DN", "St", "Re", "Pa", "PP", "CD", "AJ", "PJ", "MT", "PF"]
+
+    def add_param(self, column_name, search_input, search_type=""):
+        if (self.query == ""):
+            self.query += column_name+search_type+":"+search_input
+        else:
+            self.query += "+AND+"+column_name+search_type+":"+search_input
+
+    def finalize_query(self, n_results, page, sorted_column, sort_order):
+        if sorted_column != "":
+            if sort_order == "True":
+                self.query += "&sort=/"
+            else:
+                self.query += "&sort=\\"
+            self.query += self.__column_names[int(sorted_column)]
+        self.query += "&limit=%s" %(n_results)
+        skip_num = (page-1)*n_results
+        self.query += "&skip=%s" %(skip_num)
+        return self.query
     
-class HomePage(object): 
-   
-    
-  
+class HomePage(object):  
     #index
     #Main function generate the main page
     def index(self, ResToPrint=50, Page=1, SortValue="", Order=False, ID="", EE="", Ty="", SR="", Pr="", RJ="", RD="", EID="", RN="", SuD="", ED="", StD="", PI="", Ca="", DN="", St="", Re="", Pa="", PP="", CD="", AJ="", PJ="", MT="", PF="", Col="15-20-7-11-2-8-4-5-23-9" , Graphic=""): 
+        ### main method to generate/return HTML page ###
+
         t0 = time.time()  ###original Col="15-20-14-10-7-11-2-8-16-4-5-23"
         MustDrawGraphics = 0
         ColumnForGraph = []
@@ -146,6 +170,8 @@ class HomePage(object):
         EventATM = 0
         ListSearch = []
         ListOfS = []
+        __query = DBquery();
+        #make a db query here! but limit & skip parametters
         if(Graphic != ""):
             ColumnForGraph = Graphic.split("-")
             MustDrawGraphics = len(ColumnForGraph)
@@ -156,72 +182,95 @@ class HomePage(object):
         if(EE != ""):
             ListSearch.append(EE)
             ListOfS.append(1)
+            __query.add_param("EE", EE, "<int>")
         if(Ty != ""):
             ListSearch.append(Ty)
             ListOfS.append(2)
+            __query.add_param("Ty", EE)
         if(SR != ""):
             ListSearch.append(SR)
             ListOfS.append(3)
+            __query.add_param("SR", SR)
         if(Pr != ""):
             ListSearch.append(Pr)
             ListOfS.append(4)
+            __query.add_param("Pr", Pr, "<int>")
         if(RJ != ""):  
             ListSearch.append(RJ)
             ListOfS.append(5)
+            __query.add_param("RJ", RJ, "<int>")
         if(RD != ""):
             ListSearch.append(RD)
             ListOfS.append(6)
+            __query.add_param("RD", RD, "<int>")
         if(EID != ""):
             ListSearch.append(EID)
             ListOfS.append(7)
+            __query.add_param("EID", EID, "<int>")
         if(RN != ""):
             ListSearch.append(RN)
             ListOfS.append(8)
+            __query.add_param("RN", RN)
         if(SuD != ""):
             ListSearch.append(SuD)
             ListOfS.append(9)
+            __query.add_param("SuD", SuD)
         if(ED != ""):
             ListSearch.append(ED)
             ListOfS.append(10)
+            __query.add_param("ED", ED, "<int>")
         if(StD != ""):
             ListSearch.append(StD)
             ListOfS.append(11)
+            __query.add_param("StD", StD)
         if(PI != ""):
             ListSearch.append(PI)
             ListOfS.append(12)
+            __query.add_param("PI", PI)
         if(Ca != ""):
             ListSearch.append(Ca)
             ListOfS.append(13)
+            __query.add_param("Ca", Ca)
         if(DN != ""):
             ListSearch.append(DN)
             ListOfS.append(14)
+            __query.add_param("DN", DN)
         if(St != ""):
             ListSearch.append(St)
             ListOfS.append(15)
+            __query.add_param("St", St)
         if(Re != ""):
             ListSearch.append(Re)
             ListOfS.append(16)
+            __query.add_param("Re", Re, "<int>")
         if(Pa != ""):
             ListSearch.append(Pa)
             ListOfS.append(17)
+            ##__query.add_param("SuD", SuD) #??? currently non working 
         if(PP != ""):
             ListSearch.append(PP)
             ListOfS.append(18)
+            __query.add_param("PP", PP, "<int>")
         if(CD != ""):
             ListSearch.append(CD)
             ListOfS.append(19)
+            __query.add_param("CD", CD, "<double>")
         if(AJ != ""):
             ListSearch.append(AJ)
             ListOfS.append(20)
+            __query.add_param("AJ", AJ, "<int>")
         if(PJ != ""):
             ListSearch.append(PJ)
             ListOfS.append(21)
+            __query.add_param("PJ", PJ, "<int>")
         if(MT != ""):
             ListSearch.append(MT)
             ListOfS.append(22)
+            __query.add_param("MT", MT)
         if(PF != ""):
             ListSearch.append(PF)
             ListOfS.append(23)
+            ###??? querying for performance must be improved -- searching in couchdb-lucene over object
         try :
             ResToPrint = int(''.join(ResToPrint))
             if(ResToPrint < 0):
@@ -234,7 +283,12 @@ class HomePage(object):
         except:
             ResToPrint = 50
             Page = 1
-            SortValue = ""   
+            SortValue = ""
+        __page_offset = (Page-1)*ResToPrint
+        if len(ListSearch) != 0:
+            number_of_results = Initializer().Actualization('_fti/_design/lucene/search?q='+__query.finalize_query(ResToPrint, Page, SortValue, Order)+'&include_docs=true')
+        else:
+            number_of_results = Initializer().Actualization('_all_docs?include_docs=true&skip=%s&limit=%s' %(__page_offset, ResToPrint))
         try :
             """
             if(len(ListOfS) > 0):
@@ -281,21 +335,7 @@ class HomePage(object):
 
                     i = i + 1
             """
-            ListTemp = list(ListOfSimulations)
-            ## implement the search
-            for (index,Search) in enumerate(ListSearch):
-                Search_Index = ListOfS[index]
-                print "Search",Search_Index,Search
-                print "\t",len(ListTemp),"elements"
-                Search_Attribute = ListOfAttributs[Search_Index]
-                print Search_Attribute
-                def matching_element(element,search_attr,search_key,search):
-                    if type(element.Attributs[search_attr]) == str:
-                        ExprToSearch = re.compile(search)
-                        return ExprToSearch.search( element.Attributs[search_attr]) != None
-                    else:
-                        return self.ExprSearchEngine(search, element.Attributs[search_attr]) != 0
-                ListTemp = filter( lambda el : matching_element(el, Search_Attribute, Search_Index, Search)==True, ListTemp)
+            ListTemp = list(ListOfSimulations) #list of data
 
             #anyways, calculate the total number of events and expected from selected
             for items in ListTemp:
@@ -319,7 +359,7 @@ class HomePage(object):
                 ListTemp.sort(key=itemgetter(ListOfAttributs[int(SortValue) - 1]), reverse=True)
             else:
                 ListTemp.sort(key=itemgetter(ListOfAttributs[int(SortValue) - 1]), reverse=False)
-        TableHTML = self.ReturnResult(ListTemp, ID, EE, Ty, SR, Pr, RJ, RD, EID, RN, SuD, ED, StD, PI, Ca, DN, St, Re, Pa, PP, CD, AJ, PJ, MT, PF, ListOfColumns,Page,ResToPrint)
+        TableHTML = self.ReturnResult(ListTemp, ID, EE, Ty, SR, Pr, RJ, RD, EID, RN, SuD, ED, StD, PI, Ca, DN, St, Re, Pa, PP, CD, AJ, PJ, MT, PF, ListOfColumns,Page,ResToPrint) ##returns table structure
         HistoCompl = self.ScaleAndValue(ListTemp, 19, 20, 100)
         i = 0
         HistoPerso = ()
@@ -406,13 +446,13 @@ class HomePage(object):
               createGauge("#holderB", "Completion",''' + str(CompletionGauge) + ''');   
         ''' + self.DrawMeAGraph(MustDrawGraphics, HistoPerso) + '''
         </script>
-        <p> about ''' + str(len(ListTemp)) + ''' results ( 
-        ''' + str(time.time() - t0) + ''') seconds<br>
-        Last HeartBeat ''' + DateHeartBeat + '''</p>
+        <p>Displaying from %s to %s out of %s results in (%s secons)
+        <span class="PanelA"><a onclick="nextPage(-1);" style="padding-top: 0px; padding-bottom: 0px;" href="#">Previous Page</a></span>
+        <span class="PanelA"><a onclick="nextPage(1);" style="padding-top: 0px; padding-bottom: 0px;" href="#">Next Page</a></span>
+        </p>
         </body>
         </html>
-        '''
-       
+        '''%(__page_offset, __page_offset+ResToPrint, number_of_results, str(time.time() - t0))
 
         
     def DrawMeAGraph(self, NbVar, ValueGraphA=""):
@@ -740,15 +780,14 @@ class HomePage(object):
         String = String + "</tr>"
         From = (Page - 1) * ResultToPrint
         To = Page * ResultToPrint
-        while((From < To)and(From < len(ListB))):
-            String = String + ListB[From].toString((From % 2), ListOfColumns)
-            From = From + 1
+        for index, elem in enumerate(ListB):
+            String = String + elem.toString(index%2, ListOfColumns)
         return String
     index.exposed = True 
    
 class Initializer(object):
     
-    def Actualization(self):
+    def Actualization(self, db_query):
         possible_source = ['file','web','db']
         source = 'db'
         if source == 'web':
@@ -760,16 +799,19 @@ class Initializer(object):
             jsonContent = json.loads(JSONFile.read())
         elif source == 'db':
             ### NEW super cool stuff
-            dbData = urllib2.urlopen('http://cms-pdmv-stats:5984/stats/_all_docs?include_docs=true')
-            jsonContent = map(lambda c: c['doc'], filter(lambda r : not r['id'].startswith('_'), json.loads(dbData.read())['rows']))
-        
-        ## no L = Content.split("{'pdmv")
-        i = 1    
+            ##go to view to get data with params!
+            print "##DB_QUERY: %s" %(db_query)
+            dbData = urllib2.urlopen('http://pdmv:5984/stats/'+db_query)
+            data = json.loads(dbData.read())
+            n_results = data['total_rows']
+            print "Found %s result(-s)"%(data['total_rows'])
+            jsonContent = map(lambda c: c['doc'], filter(lambda r : not r['id'].startswith('_'), data['rows'])) ##needs update
+        i = 1
         while(i < len(jsonContent)):
+            print i
             Sim = Simulation()
             Sim._init_()
             Sim.Attributs["SIMID"] = i
-            ### print jsonContent[i]
             Sim.Attributs["PDMV expected events"] = int(jsonContent[i]["pdmv_expected_events"])
             Sim.Attributs["PDMV type"] = str(jsonContent[i]["pdmv_type"])
             Sim.Attributs["PDMV status from reqmngr"] = str(jsonContent[i]["pdmv_status_from_reqmngr"])
@@ -817,10 +859,8 @@ class Initializer(object):
         while(i < len(ListOfSimulationsTemp)):
             ListOfSimulations.append(ListOfSimulationsTemp[i])
             i = i + 1
-        threading.Timer(900,self.Actualization).start() 
-        global DateHeartBeat 
-        DateHeartBeat = time.strftime('%d/%m/%y %H:%M', time.localtime())  
         del(ListOfSimulationsTemp[:])
+        return n_results
       
     def getStr(self, string, key):
         i = string.find(key)

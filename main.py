@@ -5,7 +5,8 @@ import json
 import urllib2
 
 import traceback
-
+import subprocess
+import sys
 from internals.display import Simulation, HomePage,Initializer, ListOfSimulations
 from internals.rest import RestIndex, GetOne, UpdateOne
 
@@ -34,7 +35,14 @@ def getAllDocs():
     data = f.read()
     return data
 
-
+print "### Checking if couchdb-lucene is runing ###"
+proc = subprocess.Popen("curl localhost:5985 -s", stdout=subprocess.PIPE,shell=True)
+output = proc.communicate()[0]
+try:
+	json.loads(output)
+except:
+	print "couchdb-lucene is not runing! Please run:\n nohup /build/couchdb-lucene-0.10.0-SNAPSHOT/bin/run &"
+	sys.exit(1)
 
 root = HomePage()
 root.simulation_list = getAllSimulations
@@ -43,5 +51,5 @@ root.Db_all = getAllDocs
 root.restapi = RestIndex()
 root.restapi.get_one = GetOne()
 root.restapi.update = UpdateOne()
-Initializer().Actualization()
+#Initializer().Actualization()
 cherrypy.quickstart(root, config='prod.conf')
