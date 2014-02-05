@@ -1,8 +1,9 @@
 import json
 import time
-from operator import itemgetter
 import re
 import urllib2
+import traceback
+from operator import itemgetter
 
 class Simulation(object):    
     #
@@ -141,21 +142,38 @@ class DBquery(object):
 
     def add_param(self, column_name, search_input, search_type=""):
         if (self.query == ""):
-            self.query += column_name+search_type+":"+search_input
+            if search_input.find("-") != -1:
+                self.query += column_name+search_type+':"'+search_input+'"'
+            else:
+                self.query += column_name+search_type+':'+search_input
         else:
-            self.query += "+AND+"+column_name+search_type+":"+search_input
+            if search_input.find("-") != -1:
+                self.query += '+AND+'+column_name+search_type+':"'+search_input+'"'
+            else:
+                self.query += '+AND+'+column_name+search_type+':'+search_input
 
     def finalize_query(self, n_results, page, sorted_column, sort_order):
+        __query = self.query
         if sorted_column != "":
             if sort_order == "True":
-                self.query += "&sort=/"
+                __query += "&sort=/"
             else:
-                self.query += "&sort=\\"
-            self.query += self.__column_names[int(sorted_column)]
-        self.query += "&limit=%s" %(n_results)
+                __query += "&sort=\\"
+            __query += self.__column_names[int(sorted_column)]
+        __query += "&limit=%s" %(n_results)
         skip_num = (page-1)*n_results
-        self.query += "&skip=%s" %(skip_num)
-        return self.query
+        __query += "&skip=%s" %(skip_num)
+        return __query
+
+    def graph_query(self, sorted_column, sort_order):
+        __query = self.query
+        if sorted_column != "":
+            if sort_order == "True":
+                __query += "&sort=/"
+            else:
+                __query += "&sort=\\"
+            __query += self.__column_names[int(sorted_column)]
+        return __query
     
 class HomePage(object):  
     #index
@@ -336,11 +354,23 @@ class HomePage(object):
                     i = i + 1
             """
             ListTemp = list(ListOfSimulations) #list of data
+            #Lets get statistical data for graphs!
+            if len(ListSearch) != 0:
+                __url = 'http://cms-pdmv-stats:5984/stats/' + '_fti/_design/lucene/search?q=' + __query.graph_query(SortValue, Order) + '&limit=100000'
+                print __url
+                dbData = urllib2.urlopen(__url)
+                __stats_data = [elem["fields"] for elem in json.loads(dbData.read())["rows"]]
+                for item in __stats_data:
+                    EventExpectedTot += item["EE"]
+                    EventATM += item["EID"]
+            else:
+                ### stats data ????
+                for item in ListTemp:
+                    EventExpectedTot += item.Attributs["PDMV expected events"]
+                    EventATM += item.Attributs["PDMV evts in DAS"]
 
             #anyways, calculate the total number of events and expected from selected
-            for items in ListTemp:
-                EventExpectedTot+=items.Attributs["PDMV expected events"]
-                EventATM+=items.Attributs["PDMV evts in DAS"]
+
                 
         except :
             print "failing EventExpectedTot and EventATM"
@@ -352,21 +382,30 @@ class HomePage(object):
         else:
             CompletionGauge = int(float(EventATM * 100.0) / float(EventExpectedTot))
             
-        if(CompletionGauge > 100):
+        if (CompletionGauge > 100):
             CompletionGauge = 100
-        if(SortValue != ""):
-            if(''.join(Order) == "True"):
+        if (SortValue != ""):
+            if (''.join(Order) == "True"):
                 ListTemp.sort(key=itemgetter(ListOfAttributs[int(SortValue) - 1]), reverse=True)
             else:
                 ListTemp.sort(key=itemgetter(ListOfAttributs[int(SortValue) - 1]), reverse=False)
         TableHTML = self.ReturnResult(ListTemp, ID, EE, Ty, SR, Pr, RJ, RD, EID, RN, SuD, ED, StD, PI, Ca, DN, St, Re, Pa, PP, CD, AJ, PJ, MT, PF, ListOfColumns,Page,ResToPrint) ##returns table structure
-        HistoCompl = self.ScaleAndValue(ListTemp, 19, 20, 100)
+        if len(ListSearch) != 0:
+            HistoCompl = self.ScaleAndValue(__stats_data, 19, 20, 100)
+        else:
+            HistoCompl = self.ScaleAndValueStandard(ListTemp, 19, 20, 100)
         i = 0
         HistoPerso = ()
-        if(MustDrawGraphics == 1):
-            HistoPerso = self.ScaleAndValue(ListTemp, int(ColumnForGraph[0]) - 1, 20)
-        elif(MustDrawGraphics == 2):
-            HistoPerso=self.ScaleAndValueScatter(ListTemp, int(ColumnForGraph[0]) - 1, int(ColumnForGraph[1]) - 1, 20)
+        if (MustDrawGraphics == 1):
+            if len(ListSearch) != 0:
+                HistoPerso = self.ScaleAndValue(__stats_data, int(ColumnForGraph[0]) - 1, 20)
+            else:
+                HistoPerso = self.ScaleAndValueStandard(ListTemp, int(ColumnForGraph[0]) - 1, 20)
+        elif (MustDrawGraphics == 2):
+            if len(ListSearch) != 0:
+                HistoPerso = self.ScaleAndValueScatter(__stats_data, int(ColumnForGraph[0]) - 1, int(ColumnForGraph[1]) - 1, 20)
+            else:
+                HistoPerso = self.ScaleAndValueScatterStandard(ListTemp, int(ColumnForGraph[0]) - 1, int(ColumnForGraph[1]) - 1, 20)
         return '''
         <!DOCTYPE HTML>
         <html>
@@ -516,81 +555,199 @@ class HomePage(object):
         return Javascript
     
     def ScaleAndValueScatter(self, ListA, IndA, IndB, Bins):
-        if(len(ListA)>0):
+        __short_attr_names = ["ID", "EE", "Ty", "SR", "Pr", "RJ", "RD", "EID", "RN", "SuD", "ED", "StD", "PI", "Ca", "DN", "St", "Re", "Pa", "PP", "CD", "AJ", "PJ", "MT", "PF"]
+        if (len(ListA) > 0):
             TypeA = 0
-            MaxA=0
-            MaxB=0
+            MaxA = 0
+            MaxB = 0
+            TypeB = 0
+            i = 0
+            Data = []
+            Indice = -1
+            ValA = ListA[0][__short_attr_names[IndA]]
+            ValB = ListA[0][__short_attr_names[IndB]]
+            if (type(ValA) == type(0) or (type(ValA) == type(0.0))):
+                TypeA = 1
+            if (type(ValB) == type(0) or (type(ValB) == type(0.0))):
+                TypeB = 1
+            if (TypeA):
+                i = 0
+                while (i < len(ListA)):
+                        if (MaxA < ListA[i][__short_attr_names[IndA]]):
+                            MaxA = ListA[i][__short_attr_names[IndA]]
+                        i = i + 1
+                StepA = float(MaxA) / float(Bins)
+                Round = str(StepA).split(".")
+                if ((len(Round) > 1) and (int(Round[1]) > 0)):
+                    StepA = int(Round[0]) + 1
+            if (TypeB):
+                i = 0
+                while (i < len(ListA)):
+                        if (MaxB < ListA[i][__short_attr_names[IndB]]):
+                            MaxB = ListA[i][__short_attr_names[IndB]]
+                        i = i + 1
+                StepB = float(MaxB) / float(Bins)
+                Round = str(StepB).split(".")
+                if ((len(Round) > 1)and(int(Round[1]) > 0)):
+                    StepB = int(Round[0]) + 1
+            i = 0
+            while (i < len(ListA)):
+                if (TypeA and TypeB):
+                    ValA = ListA[i][__short_attr_names[IndA]]//StepA
+                    ValB = ListA[i][__short_attr_names[IndB]]//StepB
+                elif (TypeA):
+                    ValA = ListA[i][__short_attr_names[IndA]]//StepA
+                    ValB = ListA[i][__short_attr_names[IndB]]
+                elif (TypeB):
+                    ValA = ListA[i][__short_attr_names[IndA]]
+                    ValB = ListA[i][__short_attr_names[IndB]]//StepB
+                else:
+                    ValA = ListA[i][__short_attr_names[IndA]]
+                    ValB = ListA[i][__short_attr_names[IndB]]
+                if (TypeA and ValA >= Bins):
+                    ValA = Bins-1
+                if (TypeB and ValB >= Bins):
+                    ValB = Bins-1
+                Indice = self.IsTupleInData(Data, ValA, ValB)
+
+                if (Indice == -1):
+                    Data.append([ValA, ValB, 1])
+                else:
+                    Data[Indice][2] = Data[Indice][2] + 1
+                i = i + 1;
+            ScaleA = []
+            ScaleB = []
+            if (TypeA):
+                i = 0
+                while (i <= (Bins * StepA) + 1):
+                    ScaleA.append(i)
+                    i = i + StepA
+            if (TypeB):
+                i = 0
+                while (i <= Bins * StepB):
+                    ScaleB.append(i)
+                    i = i + StepB
+
+            return (Data, ScaleA,ScaleB, str(ListOfAttributs[IndA]+"/"+ListOfAttributs[IndB]))
+
+    def ScaleAndValueScatterStandard(self, ListA, IndA, IndB, Bins):
+        if (len(ListA) > 0):
+            TypeA = 0
+            MaxA = 0
+            MaxB = 0
             TypeB = 0
             i = 0
             Data = []
             Indice = -1
             ValA = ListA[0].Attributs[ListOfAttributs[IndA]]
             ValB = ListA[0].Attributs[ListOfAttributs[IndB]]
-            if(type(ValA) == type(0)or(type(ValA) == type(0.0))):
+            if (type(ValA) == type(0) or (type(ValA) == type(0.0))):
                 TypeA = 1
-            if(type(ValB) == type(0)or(type(ValB) == type(0.0))):
+            if (type(ValB) == type(0)or(type(ValB) == type(0.0))):
                 TypeB = 1
-            if(TypeA):
-                i=0
-                while(i < len(ListA)):
-                        if(MaxA < ListA[i].Attributs[ListOfAttributs[IndA]]):
+            if (TypeA):
+                i = 0
+                while (i < len(ListA)):
+                        if (MaxA < ListA[i].Attributs[ListOfAttributs[IndA]]):
                             MaxA = ListA[i].Attributs[ListOfAttributs[IndA]]
                         i = i + 1
                 StepA = float(MaxA) / float(Bins)
                 Round = str(StepA).split(".")
-                if((len(Round) > 1)and(int(Round[1]) > 0)):
+                if ((len(Round) > 1) and (int(Round[1]) > 0)):
                     StepA = int(Round[0]) + 1
-            if(TypeB):
-                i=0
-                while(i < len(ListA)):
-                        if(MaxB < ListA[i].Attributs[ListOfAttributs[IndB]]):
+            if (TypeB):
+                i = 0
+                while (i < len(ListA)):
+                        if (MaxB < ListA[i].Attributs[ListOfAttributs[IndB]]):
                             MaxB = ListA[i].Attributs[ListOfAttributs[IndB]]
                         i = i + 1
                 StepB = float(MaxB) / float(Bins)
                 Round = str(StepB).split(".")
-                if((len(Round) > 1)and(int(Round[1]) > 0)):
+                if ((len(Round) > 1) and (int(Round[1]) > 0)):
                     StepB = int(Round[0]) + 1
-            i=0
-            while(i < len(ListA)):
-                if(TypeA and TypeB):
+            i = 0
+            while (i < len(ListA)):
+                if (TypeA and TypeB):
                     ValA = ListA[i].Attributs[ListOfAttributs[IndA]]//StepA
-                    ValB = ListA[i].Attributs[ListOfAttributs[IndB]]//StepB  
-                elif(TypeA):
+                    ValB = ListA[i].Attributs[ListOfAttributs[IndB]]//StepB
+                elif (TypeA):
                     ValA = ListA[i].Attributs[ListOfAttributs[IndA]]//StepA
-                    ValB = ListA[i].Attributs[ListOfAttributs[IndB]]    
-                elif(TypeB):
+                    ValB = ListA[i].Attributs[ListOfAttributs[IndB]]
+                elif (TypeB):
                     ValA = ListA[i].Attributs[ListOfAttributs[IndA]]
-                    ValB = ListA[i].Attributs[ListOfAttributs[IndB]]//StepB  
+                    ValB = ListA[i].Attributs[ListOfAttributs[IndB]]//StepB
                 else:
                     ValA = ListA[i].Attributs[ListOfAttributs[IndA]]
-                    ValB = ListA[i].Attributs[ListOfAttributs[IndB]]    
-                if(TypeA and ValA>=Bins):
-                    ValA=Bins-1
-                if(TypeB and ValB>=Bins):
-                    ValB=Bins-1
+                    ValB = ListA[i].Attributs[ListOfAttributs[IndB]]
+                if (TypeA and ValA >= Bins):
+                    ValA = Bins-1
+                if (TypeB and ValB >= Bins):
+                    ValB = Bins - 1
                 Indice = self.IsTupleInData(Data, ValA, ValB)
                 
-                if(Indice == -1):
-                        Data.append([ValA, ValB, 1])          
+                if (Indice == -1):
+                    Data.append([ValA, ValB, 1])
                 else:
                     Data[Indice][2] = Data[Indice][2] + 1
                 i = i + 1;
-            ScaleA=[]
-            ScaleB=[]
-            if(TypeA):
+            ScaleA = []
+            ScaleB = []
+            if (TypeA):
                 i = 0
-                while(i <= (Bins * StepA)+1):
+                while (i <= (Bins * StepA) + 1):
                     ScaleA.append(i)
                     i = i + StepA
-            if(TypeB):
+            if (TypeB):
                 i = 0
-                while(i <= Bins * StepB):
+                while (i <= Bins * StepB):
                     ScaleB.append(i)
                     i = i + StepB
-                    
+
             return (Data, ScaleA,ScaleB, str(ListOfAttributs[IndA]+"/"+ListOfAttributs[IndB]))
-                            
-                        
+
+    def ScaleAndValueStandard(self, ListA, Ind, Bins, Max=0):
+        i = 0
+        ValuesA = []
+        ScaleA = []
+        if (len(ListA) > 0):
+            if (type(ListA[i].Attributs[ListOfAttributs[Ind]]) == type(0) or (type(ListA[i].Attributs[ListOfAttributs[Ind]]) == type(0.0))):
+                while (i < Bins):
+                    ValuesA.append(0);
+                    i = i + 1
+                i = 0
+                if (Max == 0):
+                    while (i < len(ListA)):
+                        if (Max < ListA[i].Attributs[ListOfAttributs[Ind]]):
+                            Max = ListA[i].Attributs[ListOfAttributs[Ind]]
+                        i = i + 1
+                i = 0
+                Step = float(Max) / float(Bins)
+                Round = str(Step).split(".")
+                if ((len(Round) > 1)and(int(Round[1]) > 0)):
+                    Step = int(Round[0]) + 1
+
+                while (i < len(ListA)):
+                    if (ListA[i].Attributs[ListOfAttributs[Ind]] >= Max):
+                        ValuesA[Bins - 1] = ValuesA[Bins - 1] + 1
+                    elif (ListA[i].Attributs[ListOfAttributs[Ind]] < 0):
+                        ValuesA[0] = ValuesA[0] + 1
+                    else:
+                        ValuesA[int(ListA[i].Attributs[ListOfAttributs[Ind]] // Step)] = ValuesA[int(ListA[i].Attributs[ListOfAttributs[Ind]] // Step)] +1
+                    i = i + 1
+                i = 0
+                while (i <= Bins * Step):
+                    ScaleA.append(i)
+                    i = i + Step
+            else:
+                while (i < len(ListA)):
+                    if (ScaleA.count(str(ListA[i].Attributs[ListOfAttributs[Ind]])) == 0):
+                        ScaleA.append(str(ListA[i].Attributs[ListOfAttributs[Ind]]))
+                        ValuesA.append(1)
+                    else:
+                        ValuesA[ScaleA.index(str(ListA[i].Attributs[ListOfAttributs[Ind]]))] = ValuesA[ScaleA.index(str(ListA[i].Attributs[ListOfAttributs[Ind]]))] + 1
+                    i = i + 1
+        return (ValuesA, ScaleA, ListOfAttributs[Ind]);
+
     def IsTupleInData(self, Data, ValA, ValB):
         i = 0
         while(i < len(Data)):
@@ -601,19 +758,20 @@ class HomePage(object):
                 
                     
     def ScaleAndValue(self, ListA, Ind, Bins, Max=0):
+        __short_attr_names = ["ID", "EE", "Ty", "SR", "Pr", "RJ", "RD", "EID", "RN", "SuD", "ED", "StD", "PI", "Ca", "DN", "St", "Re", "Pa", "PP", "CD", "AJ", "PJ", "MT", "PF"]
         i = 0
         ValuesA = []
         ScaleA = []
         if(len(ListA) > 0):
-            if(type(ListA[i].Attributs[ListOfAttributs[Ind]]) == type(0)or(type(ListA[i].Attributs[ListOfAttributs[Ind]]) == type(0.0))):
+            if(type(ListA[i][__short_attr_names[Ind]]) == type(0)or(type(ListA[i][__short_attr_names[Ind]]) == type(0.0))):
                 while(i < Bins):
                     ValuesA.append(0);
                     i = i + 1
                 i = 0
                 if(Max == 0):
                     while(i < len(ListA)):
-                        if(Max < ListA[i].Attributs[ListOfAttributs[Ind]]):
-                            Max = ListA[i].Attributs[ListOfAttributs[Ind]]
+                        if(Max < ListA[i][__short_attr_names[Ind]]):
+                            Max = ListA[i][__short_attr_names[Ind]]
                         i = i + 1
                 i = 0
                 Step = float(Max) / float(Bins)
@@ -622,12 +780,12 @@ class HomePage(object):
                     Step = int(Round[0]) + 1
                 
                 while(i < len(ListA)):
-                    if(ListA[i].Attributs[ListOfAttributs[Ind]] >= Max):
+                    if(ListA[i][__short_attr_names[Ind]] >= Max):
                         ValuesA[Bins - 1] = ValuesA[Bins - 1] + 1
-                    elif(ListA[i].Attributs[ListOfAttributs[Ind]] < 0):
+                    elif(ListA[i][__short_attr_names[Ind]] < 0):
                         ValuesA[0] = ValuesA[0] + 1
                     else:
-                        ValuesA[int(ListA[i].Attributs[ListOfAttributs[Ind]] // Step)] = ValuesA[int(ListA[i].Attributs[ListOfAttributs[Ind]] // Step)] +1
+                        ValuesA[int(ListA[i][__short_attr_names[Ind]] // Step)] = ValuesA[int(ListA[i][__short_attr_names[Ind]] // Step)] +1
                     i = i + 1
                 i=0
                 while(i <= Bins * Step):
@@ -635,11 +793,11 @@ class HomePage(object):
                     i = i + Step
             else:
                 while(i < len(ListA)):
-                    if(ScaleA.count(str(ListA[i].Attributs[ListOfAttributs[Ind]])) == 0):
-                        ScaleA.append(str(ListA[i].Attributs[ListOfAttributs[Ind]]))
+                    if(ScaleA.count(str(ListA[i][__short_attr_names[Ind]])) == 0):
+                        ScaleA.append(str(ListA[i][__short_attr_names[Ind]]))
                         ValuesA.append(1)
                     else:
-                        ValuesA[ScaleA.index(str(ListA[i].Attributs[ListOfAttributs[Ind]]))] = ValuesA[ScaleA.index(str(ListA[i].Attributs[ListOfAttributs[Ind]]))] + 1
+                        ValuesA[ScaleA.index(str(ListA[i][__short_attr_names[Ind]]))] = ValuesA[ScaleA.index(str(ListA[i][__short_attr_names[Ind]]))] + 1
                     i = i + 1
         return (ValuesA, ScaleA, ListOfAttributs[Ind]);
         
@@ -806,7 +964,7 @@ class Initializer(object):
             n_results = data['total_rows']
             print "Found %s result(-s)"%(data['total_rows'])
             jsonContent = map(lambda c: c['doc'], filter(lambda r : not r['id'].startswith('_'), data['rows'])) ##needs update
-        i = 1
+        i = 0
         while(i < len(jsonContent)):
             Sim = Simulation()
             Sim._init_()
