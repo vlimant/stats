@@ -150,7 +150,11 @@ def generic_post(url, data_input):
     return ret_val
 #-------------------------------------------------------------------------------
 
-def get_requests_list(pattern=""):
+def get_requests_list(pattern="", not_in_wmstats=False):
+
+    if not_in_wmstats:
+      return get_requests_list_old(pattern)
+    
     opener=urllib2.build_opener(X509CertOpen())  
     url="https://cmsweb.cern.ch/wmstats/_design/WMStats/_view/requestByStatusAndType?stale=update_after"
     datareq = urllib2.Request(url)
@@ -834,8 +838,10 @@ def getDictFromWorkload(req_name):
 
 
 numberofrequestnameprocessed=0
+countOld=0
 def parallel_test(arguments,force=False):
   DEBUGME=False
+  global countOld
   req,old_useful_info = arguments
   try:
     if DEBUGME: print "+"
@@ -912,9 +918,10 @@ def parallel_test(arguments,force=False):
         ## Oct 9 : > 20
         ## OCt 11: > 10
         ## Oct 12: > 5 ## and stay like this
-        if deltaUpdate > 10:
+        if deltaUpdate > 10 and countOld<=100:
           print 'too long ago'
           skewed=True
+          countOld+=1
 
       if not 'pdmv_monitor_time' in pdmv_request_dict:
         skewed=True
