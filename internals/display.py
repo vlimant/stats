@@ -1,4 +1,5 @@
 import json
+import os
 import time
 import re
 import urllib2
@@ -77,13 +78,16 @@ class Simulation(object):
             if(int(ListOfColumns[i]) == 8):
                 String = String + "<td>" + str(self.Attributs["PDMV evts in DAS"]) + "</td>"
             if(int(ListOfColumns[i]) == 9):
+                __dirname = os.path.normpath(os.path.dirname("/".join(self.Attributs["PDMV request name"].split("_"))))
+                __filename = os.path.basename("/".join(self.Attributs["PDMV request name"].split("_")))
+                __growthurl = os.path.join(__dirname, __filename)
                 #String = String + "<td>" + '<a href="https://cmsweb.cern.ch/couchdb/workloadsummary/_design/WorkloadSummary/_show/histogramByWorkflow/' + self.Attributs["PDMV request name"] + '">' + self.Attributs["PDMV request name"] + "</a></td>"
                 #String = String + "<td>"+ '<a href="https://cmsweb.cern.ch/reqmgr/view/details/'+self.Attributs["PDMV request name"] + '"> details </a>' + '<a href="https://cmsweb.cern.ch/couchdb/workloadsummary/_design/WorkloadSummary/_show/histogramByWorkflow/'+ self.Attributs["PDMV request name"] + '">' + self.Attributs["PDMV request name"]+"</a> </td>"
                 String = String + '<td><a href="https://cmsweb.cern.ch/reqmgr/view/details/%s">details</a> <a href="https://cmsweb.cern.ch/couchdb/workloadsummary/_design/WorkloadSummary/_show/histogramByWorkflow/%s"> %s </a> <a href=https://cms-pdmv.web.cern.ch/cms-pdmv/stats/growth/%s.gif target=_blank><img src=https://cms-pdmv.web.cern.ch/cms-pdmv/stats/growth/%s.gif alt="" width=100></a> </td>'%(self.Attributs["PDMV request name"],
-                                                                                                                                                                                                                                                                                                                                                                                                                   self.Attributs["PDMV request name"],
-                                                                                                                                                                                                                                                                                                                                                                                                                   self.Attributs["PDMV request name"],
-                                                                                                                                                                                                                                                                                                                                                                                                                   self.Attributs["PDMV request name"],
-                                                                                                                                                                                                                                                                                                                                                                                                                   self.Attributs["PDMV request name"])
+                    self.Attributs["PDMV request name"],
+                    self.Attributs["PDMV request name"],
+                    __growthurl,
+                    __growthurl)
                                                                                                                                                                                                                                                                                                                                                                                                                    
             if(int(ListOfColumns[i]) == 10):
                 String = String + "<td>" + self.Attributs["PDMV submission date"] + "</td>"
