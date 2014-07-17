@@ -100,7 +100,7 @@ class Simulation(object):
             if(int(ListOfColumns[i]) == 14):
                 String = String + "<td>" + self.Attributs["PDMV campaign"] + '</td>'
             if(int(ListOfColumns[i]) == 15):
-                String = String + '<td><a href="https://cmsweb.cern.ch/das/request?view=list&limit=10&instance=cms_dbs_prod_global&input=dataset+dataset=' + self.Attributs["PDMV data set name"] + '">' + self.Attributs["PDMV data set name"] + "</a></td>"
+                String = String + '<td><a href="https://cmsweb.cern.ch/das/request?view=list&limit=10&instance=prod/global&input=dataset+dataset=' + self.Attributs["PDMV data set name"] + '">' + self.Attributs["PDMV data set name"] + "</a></td>"
             if(int(ListOfColumns[i]) == 16):
                 String = String + "<td>" + self.Attributs["PDMV status"] + "</td>"
             if(int(ListOfColumns[i]) == 17):
