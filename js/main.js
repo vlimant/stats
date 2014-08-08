@@ -25,6 +25,18 @@ function RemCol(Col)
 	return document.ACMTWSmenu.Col.value.replace(Col,"");
 }
 
+function nextPage(page)
+{
+    if (parseInt(document.ACMTWSmenu.Page.value) >= 1)
+    {
+	    document.ACMTWSmenu.Page.value = parseInt(document.ACMTWSmenu.Page.value) + parseInt(page);
+	    if (document.ACMTWSmenu.Page.value == 0)
+	    {
+            document.ACMTWSmenu.Page.value = 1;
+	    }
+	    document.ACMTWSmenu.submit();
+	}
+}
 Start=0;
 function SelectCol(Value) {
 	if (ListColToDRaw[0] == "") {

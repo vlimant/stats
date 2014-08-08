@@ -1,9 +1,10 @@
 import json
+import os
 import time
-from operator import itemgetter
 import re
-import threading
 import urllib2
+import traceback
+from operator import itemgetter
 
 class Simulation(object):    
     #
@@ -77,13 +78,16 @@ class Simulation(object):
             if(int(ListOfColumns[i]) == 8):
                 String = String + "<td>" + str(self.Attributs["PDMV evts in DAS"]) + "</td>"
             if(int(ListOfColumns[i]) == 9):
+                __dirname = os.path.normpath(os.path.dirname("/".join(self.Attributs["PDMV request name"].split("_"))))
+                __filename = os.path.basename("/".join(self.Attributs["PDMV request name"].split("_")))
+                __growthurl = os.path.join(__dirname, __filename)
                 #String = String + "<td>" + '<a href="https://cmsweb.cern.ch/couchdb/workloadsummary/_design/WorkloadSummary/_show/histogramByWorkflow/' + self.Attributs["PDMV request name"] + '">' + self.Attributs["PDMV request name"] + "</a></td>"
                 #String = String + "<td>"+ '<a href="https://cmsweb.cern.ch/reqmgr/view/details/'+self.Attributs["PDMV request name"] + '"> details </a>' + '<a href="https://cmsweb.cern.ch/couchdb/workloadsummary/_design/WorkloadSummary/_show/histogramByWorkflow/'+ self.Attributs["PDMV request name"] + '">' + self.Attributs["PDMV request name"]+"</a> </td>"
                 String = String + '<td><a href="https://cmsweb.cern.ch/reqmgr/view/details/%s">details</a> <a href="https://cmsweb.cern.ch/couchdb/workloadsummary/_design/WorkloadSummary/_show/histogramByWorkflow/%s"> %s </a> <a href=https://cms-pdmv.web.cern.ch/cms-pdmv/stats/growth/%s.gif target=_blank><img src=https://cms-pdmv.web.cern.ch/cms-pdmv/stats/growth/%s.gif alt="" width=100></a> </td>'%(self.Attributs["PDMV request name"],
-                                                                                                                                                                                                                                                                                                                                                                                                                   self.Attributs["PDMV request name"],
-                                                                                                                                                                                                                                                                                                                                                                                                                   self.Attributs["PDMV request name"],
-                                                                                                                                                                                                                                                                                                                                                                                                                   self.Attributs["PDMV request name"],
-                                                                                                                                                                                                                                                                                                                                                                                                                   self.Attributs["PDMV request name"])
+                    self.Attributs["PDMV request name"],
+                    self.Attributs["PDMV request name"],
+                    __growthurl,
+                    __growthurl)
                                                                                                                                                                                                                                                                                                                                                                                                                    
             if(int(ListOfColumns[i]) == 10):
                 String = String + "<td>" + self.Attributs["PDMV submission date"] + "</td>"
@@ -96,7 +100,7 @@ class Simulation(object):
             if(int(ListOfColumns[i]) == 14):
                 String = String + "<td>" + self.Attributs["PDMV campaign"] + '</td>'
             if(int(ListOfColumns[i]) == 15):
-                String = String + '<td><a href="https://cmsweb.cern.ch/das/request?view=list&limit=10&instance=cms_dbs_prod_global&input=dataset+dataset=' + self.Attributs["PDMV data set name"] + '">' + self.Attributs["PDMV data set name"] + "</a></td>"
+                String = String + '<td><a href="https://cmsweb.cern.ch/das/request?view=list&limit=10&instance=prod/global&input=dataset+dataset=' + self.Attributs["PDMV data set name"] + '">' + self.Attributs["PDMV data set name"] + "</a></td>"
             if(int(ListOfColumns[i]) == 16):
                 String = String + "<td>" + self.Attributs["PDMV status"] + "</td>"
             if(int(ListOfColumns[i]) == 17):
@@ -130,15 +134,57 @@ class Simulation(object):
     #
     #Convert a rgb color in HEX value, useful for the Progress Bar Color
     def RGBtoHex(self, r, g, b):
-        return "#%02X%02X%02X" % (r, g, b)  
+        return "#%02X%02X%02X" % (r, g, b)
+
+class DBquery(object):
+    """
+    CouchDB-lucene query generator class
+    """
+    def __init__(self):
+        self.query = ""
+        self.__column_names = ["ID", "EE", "Ty", "SR", "Pr", "RJ", "RD", "EID", "RN", "SuD", "ED", "StD", "PI", "Ca", "DN", "St", "Re", "Pa", "PP", "CD", "AJ", "PJ", "MT", "PF"]
+
+    def add_param(self, column_name, search_input, search_type=""):
+        if (self.query == ""):
+            if search_input.find("-") != -1:
+                self.query += column_name+search_type+':"'+search_input+'"'
+            else:
+                self.query += column_name+search_type+':'+search_input
+        else:
+            if search_input.find("-") != -1:
+                self.query += '+AND+'+column_name+search_type+':"'+search_input+'"'
+            else:
+                self.query += '+AND+'+column_name+search_type+':'+search_input
+
+    def finalize_query(self, n_results, page, sorted_column, sort_order):
+        __query = self.query
+        if sorted_column != "":
+            if sort_order == "True":
+                __query += "&sort=/"
+            else:
+                __query += "&sort=\\"
+            __query += self.__column_names[int(sorted_column)]
+        __query += "&limit=%s" %(n_results)
+        skip_num = (page-1)*n_results
+        __query += "&skip=%s" %(skip_num)
+        return __query
+
+    def graph_query(self, sorted_column, sort_order):
+        __query = self.query
+        if sorted_column != "":
+            if sort_order == "True":
+                __query += "&sort=/"
+            else:
+                __query += "&sort=\\"
+            __query += self.__column_names[int(sorted_column)]
+        return __query
     
-class HomePage(object): 
-   
-    
-  
+class HomePage(object):  
     #index
     #Main function generate the main page
     def index(self, ResToPrint=50, Page=1, SortValue="", Order=False, ID="", EE="", Ty="", SR="", Pr="", RJ="", RD="", EID="", RN="", SuD="", ED="", StD="", PI="", Ca="", DN="", St="", Re="", Pa="", PP="", CD="", AJ="", PJ="", MT="", PF="", Col="15-20-7-11-2-8-4-5-23-9" , Graphic=""): 
+        ### main method to generate/return HTML page ###
+
         t0 = time.time()  ###original Col="15-20-14-10-7-11-2-8-16-4-5-23"
         MustDrawGraphics = 0
         ColumnForGraph = []
@@ -146,6 +192,8 @@ class HomePage(object):
         EventATM = 0
         ListSearch = []
         ListOfS = []
+        __query = DBquery();
+        #make a db query here! but limit & skip parametters
         if(Graphic != ""):
             ColumnForGraph = Graphic.split("-")
             MustDrawGraphics = len(ColumnForGraph)
@@ -156,72 +204,95 @@ class HomePage(object):
         if(EE != ""):
             ListSearch.append(EE)
             ListOfS.append(1)
+            __query.add_param("EE", EE, "<int>")
         if(Ty != ""):
             ListSearch.append(Ty)
             ListOfS.append(2)
+            __query.add_param("Ty", EE)
         if(SR != ""):
             ListSearch.append(SR)
             ListOfS.append(3)
+            __query.add_param("SR", SR)
         if(Pr != ""):
             ListSearch.append(Pr)
             ListOfS.append(4)
+            __query.add_param("Pr", Pr, "<int>")
         if(RJ != ""):  
             ListSearch.append(RJ)
             ListOfS.append(5)
+            __query.add_param("RJ", RJ, "<int>")
         if(RD != ""):
             ListSearch.append(RD)
             ListOfS.append(6)
+            __query.add_param("RD", RD, "<int>")
         if(EID != ""):
             ListSearch.append(EID)
             ListOfS.append(7)
+            __query.add_param("EID", EID, "<int>")
         if(RN != ""):
             ListSearch.append(RN)
             ListOfS.append(8)
+            __query.add_param("RN", RN)
         if(SuD != ""):
             ListSearch.append(SuD)
             ListOfS.append(9)
+            __query.add_param("SuD", SuD)
         if(ED != ""):
             ListSearch.append(ED)
             ListOfS.append(10)
+            __query.add_param("ED", ED, "<int>")
         if(StD != ""):
             ListSearch.append(StD)
             ListOfS.append(11)
+            __query.add_param("StD", StD)
         if(PI != ""):
             ListSearch.append(PI)
             ListOfS.append(12)
+            __query.add_param("PI", PI)
         if(Ca != ""):
             ListSearch.append(Ca)
             ListOfS.append(13)
+            __query.add_param("Ca", Ca)
         if(DN != ""):
             ListSearch.append(DN)
             ListOfS.append(14)
+            __query.add_param("DN", DN)
         if(St != ""):
             ListSearch.append(St)
             ListOfS.append(15)
+            __query.add_param("St", St)
         if(Re != ""):
             ListSearch.append(Re)
             ListOfS.append(16)
+            __query.add_param("Re", Re, "<int>")
         if(Pa != ""):
             ListSearch.append(Pa)
             ListOfS.append(17)
+            ##__query.add_param("SuD", SuD) #??? currently non working 
         if(PP != ""):
             ListSearch.append(PP)
             ListOfS.append(18)
+            __query.add_param("PP", PP, "<int>")
         if(CD != ""):
             ListSearch.append(CD)
             ListOfS.append(19)
+            __query.add_param("CD", CD, "<double>")
         if(AJ != ""):
             ListSearch.append(AJ)
             ListOfS.append(20)
+            __query.add_param("AJ", AJ, "<int>")
         if(PJ != ""):
             ListSearch.append(PJ)
             ListOfS.append(21)
+            __query.add_param("PJ", PJ, "<int>")
         if(MT != ""):
             ListSearch.append(MT)
             ListOfS.append(22)
+            __query.add_param("MT", MT)
         if(PF != ""):
             ListSearch.append(PF)
             ListOfS.append(23)
+            ###??? querying for performance must be improved -- searching in couchdb-lucene over object
         try :
             ResToPrint = int(''.join(ResToPrint))
             if(ResToPrint < 0):
@@ -234,7 +305,12 @@ class HomePage(object):
         except:
             ResToPrint = 50
             Page = 1
-            SortValue = ""   
+            SortValue = ""
+        __page_offset = (Page-1)*ResToPrint
+        if len(ListSearch) != 0:
+            number_of_results = Initializer().Actualization('_fti/_design/lucene/search?q='+__query.finalize_query(ResToPrint, Page, SortValue, Order)+'&include_docs=true')
+        else:
+            number_of_results = Initializer().Actualization('_all_docs?include_docs=true&skip=%s&limit=%s' %(__page_offset, ResToPrint))
         try :
             """
             if(len(ListOfS) > 0):
@@ -281,26 +357,24 @@ class HomePage(object):
 
                     i = i + 1
             """
-            ListTemp = list(ListOfSimulations)
-            ## implement the search
-            for (index,Search) in enumerate(ListSearch):
-                Search_Index = ListOfS[index]
-                print "Search",Search_Index,Search
-                print "\t",len(ListTemp),"elements"
-                Search_Attribute = ListOfAttributs[Search_Index]
-                print Search_Attribute
-                def matching_element(element,search_attr,search_key,search):
-                    if type(element.Attributs[search_attr]) == str:
-                        ExprToSearch = re.compile(search)
-                        return ExprToSearch.search( element.Attributs[search_attr]) != None
-                    else:
-                        return self.ExprSearchEngine(search, element.Attributs[search_attr]) != 0
-                ListTemp = filter( lambda el : matching_element(el, Search_Attribute, Search_Index, Search)==True, ListTemp)
+            ListTemp = list(ListOfSimulations) #list of data
+            #Lets get statistical data for graphs!
+            if len(ListSearch) != 0:
+                __url = 'http://cms-pdmv-stats:5984/stats/' + '_fti/_design/lucene/search?q=' + __query.graph_query(SortValue, Order) + '&limit=100000'
+                print __url
+                dbData = urllib2.urlopen(__url)
+                __stats_data = [elem["fields"] for elem in json.loads(dbData.read())["rows"]]
+                for item in __stats_data:
+                    EventExpectedTot += item["EE"]
+                    EventATM += item["EID"]
+            else:
+                ### stats data ????
+                for item in ListTemp:
+                    EventExpectedTot += item.Attributs["PDMV expected events"]
+                    EventATM += item.Attributs["PDMV evts in DAS"]
 
             #anyways, calculate the total number of events and expected from selected
-            for items in ListTemp:
-                EventExpectedTot+=items.Attributs["PDMV expected events"]
-                EventATM+=items.Attributs["PDMV evts in DAS"]
+
                 
         except :
             print "failing EventExpectedTot and EventATM"
@@ -312,21 +386,30 @@ class HomePage(object):
         else:
             CompletionGauge = int(float(EventATM * 100.0) / float(EventExpectedTot))
             
-        if(CompletionGauge > 100):
+        if (CompletionGauge > 100):
             CompletionGauge = 100
-        if(SortValue != ""):
-            if(''.join(Order) == "True"):
+        if (SortValue != ""):
+            if (''.join(Order) == "True"):
                 ListTemp.sort(key=itemgetter(ListOfAttributs[int(SortValue) - 1]), reverse=True)
             else:
                 ListTemp.sort(key=itemgetter(ListOfAttributs[int(SortValue) - 1]), reverse=False)
-        TableHTML = self.ReturnResult(ListTemp, ID, EE, Ty, SR, Pr, RJ, RD, EID, RN, SuD, ED, StD, PI, Ca, DN, St, Re, Pa, PP, CD, AJ, PJ, MT, PF, ListOfColumns,Page,ResToPrint)
-        HistoCompl = self.ScaleAndValue(ListTemp, 19, 20, 100)
+        TableHTML = self.ReturnResult(ListTemp, ID, EE, Ty, SR, Pr, RJ, RD, EID, RN, SuD, ED, StD, PI, Ca, DN, St, Re, Pa, PP, CD, AJ, PJ, MT, PF, ListOfColumns,Page,ResToPrint) ##returns table structure
+        if len(ListSearch) != 0:
+            HistoCompl = self.ScaleAndValue(__stats_data, 19, 20, 100)
+        else:
+            HistoCompl = self.ScaleAndValueStandard(ListTemp, 19, 20, 100)
         i = 0
         HistoPerso = ()
-        if(MustDrawGraphics == 1):
-            HistoPerso = self.ScaleAndValue(ListTemp, int(ColumnForGraph[0]) - 1, 20)
-        elif(MustDrawGraphics == 2):
-            HistoPerso=self.ScaleAndValueScatter(ListTemp, int(ColumnForGraph[0]) - 1, int(ColumnForGraph[1]) - 1, 20)
+        if (MustDrawGraphics == 1):
+            if len(ListSearch) != 0:
+                HistoPerso = self.ScaleAndValue(__stats_data, int(ColumnForGraph[0]) - 1, 20)
+            else:
+                HistoPerso = self.ScaleAndValueStandard(ListTemp, int(ColumnForGraph[0]) - 1, 20)
+        elif (MustDrawGraphics == 2):
+            if len(ListSearch) != 0:
+                HistoPerso = self.ScaleAndValueScatter(__stats_data, int(ColumnForGraph[0]) - 1, int(ColumnForGraph[1]) - 1, 20)
+            else:
+                HistoPerso = self.ScaleAndValueScatterStandard(ListTemp, int(ColumnForGraph[0]) - 1, int(ColumnForGraph[1]) - 1, 20)
         return '''
         <!DOCTYPE HTML>
         <html>
@@ -406,13 +489,13 @@ class HomePage(object):
               createGauge("#holderB", "Completion",''' + str(CompletionGauge) + ''');   
         ''' + self.DrawMeAGraph(MustDrawGraphics, HistoPerso) + '''
         </script>
-        <p> about ''' + str(len(ListTemp)) + ''' results ( 
-        ''' + str(time.time() - t0) + ''') seconds<br>
-        Last HeartBeat ''' + DateHeartBeat + '''</p>
+        <p>Displaying from %s to %s out of %s results in (%s secons)
+        <span class="PanelA"><a onclick="nextPage(-1);" style="padding-top: 0px; padding-bottom: 0px;" href="#">Previous Page</a></span>
+        <span class="PanelA"><a onclick="nextPage(1);" style="padding-top: 0px; padding-bottom: 0px;" href="#">Next Page</a></span>
+        </p>
         </body>
         </html>
-        '''
-       
+        '''%(__page_offset, __page_offset+ResToPrint, number_of_results, str(time.time() - t0))
 
         
     def DrawMeAGraph(self, NbVar, ValueGraphA=""):
@@ -476,81 +559,199 @@ class HomePage(object):
         return Javascript
     
     def ScaleAndValueScatter(self, ListA, IndA, IndB, Bins):
-        if(len(ListA)>0):
+        __short_attr_names = ["ID", "EE", "Ty", "SR", "Pr", "RJ", "RD", "EID", "RN", "SuD", "ED", "StD", "PI", "Ca", "DN", "St", "Re", "Pa", "PP", "CD", "AJ", "PJ", "MT", "PF"]
+        if (len(ListA) > 0):
             TypeA = 0
-            MaxA=0
-            MaxB=0
+            MaxA = 0
+            MaxB = 0
+            TypeB = 0
+            i = 0
+            Data = []
+            Indice = -1
+            ValA = ListA[0][__short_attr_names[IndA]]
+            ValB = ListA[0][__short_attr_names[IndB]]
+            if (type(ValA) == type(0) or (type(ValA) == type(0.0))):
+                TypeA = 1
+            if (type(ValB) == type(0) or (type(ValB) == type(0.0))):
+                TypeB = 1
+            if (TypeA):
+                i = 0
+                while (i < len(ListA)):
+                        if (MaxA < ListA[i][__short_attr_names[IndA]]):
+                            MaxA = ListA[i][__short_attr_names[IndA]]
+                        i = i + 1
+                StepA = float(MaxA) / float(Bins)
+                Round = str(StepA).split(".")
+                if ((len(Round) > 1) and (int(Round[1]) > 0)):
+                    StepA = int(Round[0]) + 1
+            if (TypeB):
+                i = 0
+                while (i < len(ListA)):
+                        if (MaxB < ListA[i][__short_attr_names[IndB]]):
+                            MaxB = ListA[i][__short_attr_names[IndB]]
+                        i = i + 1
+                StepB = float(MaxB) / float(Bins)
+                Round = str(StepB).split(".")
+                if ((len(Round) > 1)and(int(Round[1]) > 0)):
+                    StepB = int(Round[0]) + 1
+            i = 0
+            while (i < len(ListA)):
+                if (TypeA and TypeB):
+                    ValA = ListA[i][__short_attr_names[IndA]]//StepA
+                    ValB = ListA[i][__short_attr_names[IndB]]//StepB
+                elif (TypeA):
+                    ValA = ListA[i][__short_attr_names[IndA]]//StepA
+                    ValB = ListA[i][__short_attr_names[IndB]]
+                elif (TypeB):
+                    ValA = ListA[i][__short_attr_names[IndA]]
+                    ValB = ListA[i][__short_attr_names[IndB]]//StepB
+                else:
+                    ValA = ListA[i][__short_attr_names[IndA]]
+                    ValB = ListA[i][__short_attr_names[IndB]]
+                if (TypeA and ValA >= Bins):
+                    ValA = Bins-1
+                if (TypeB and ValB >= Bins):
+                    ValB = Bins-1
+                Indice = self.IsTupleInData(Data, ValA, ValB)
+
+                if (Indice == -1):
+                    Data.append([ValA, ValB, 1])
+                else:
+                    Data[Indice][2] = Data[Indice][2] + 1
+                i = i + 1;
+            ScaleA = []
+            ScaleB = []
+            if (TypeA):
+                i = 0
+                while (i <= (Bins * StepA) + 1):
+                    ScaleA.append(i)
+                    i = i + StepA
+            if (TypeB):
+                i = 0
+                while (i <= Bins * StepB):
+                    ScaleB.append(i)
+                    i = i + StepB
+
+            return (Data, ScaleA,ScaleB, str(ListOfAttributs[IndA]+"/"+ListOfAttributs[IndB]))
+
+    def ScaleAndValueScatterStandard(self, ListA, IndA, IndB, Bins):
+        if (len(ListA) > 0):
+            TypeA = 0
+            MaxA = 0
+            MaxB = 0
             TypeB = 0
             i = 0
             Data = []
             Indice = -1
             ValA = ListA[0].Attributs[ListOfAttributs[IndA]]
             ValB = ListA[0].Attributs[ListOfAttributs[IndB]]
-            if(type(ValA) == type(0)or(type(ValA) == type(0.0))):
+            if (type(ValA) == type(0) or (type(ValA) == type(0.0))):
                 TypeA = 1
-            if(type(ValB) == type(0)or(type(ValB) == type(0.0))):
+            if (type(ValB) == type(0)or(type(ValB) == type(0.0))):
                 TypeB = 1
-            if(TypeA):
-                i=0
-                while(i < len(ListA)):
-                        if(MaxA < ListA[i].Attributs[ListOfAttributs[IndA]]):
+            if (TypeA):
+                i = 0
+                while (i < len(ListA)):
+                        if (MaxA < ListA[i].Attributs[ListOfAttributs[IndA]]):
                             MaxA = ListA[i].Attributs[ListOfAttributs[IndA]]
                         i = i + 1
                 StepA = float(MaxA) / float(Bins)
                 Round = str(StepA).split(".")
-                if((len(Round) > 1)and(int(Round[1]) > 0)):
+                if ((len(Round) > 1) and (int(Round[1]) > 0)):
                     StepA = int(Round[0]) + 1
-            if(TypeB):
-                i=0
-                while(i < len(ListA)):
-                        if(MaxB < ListA[i].Attributs[ListOfAttributs[IndB]]):
+            if (TypeB):
+                i = 0
+                while (i < len(ListA)):
+                        if (MaxB < ListA[i].Attributs[ListOfAttributs[IndB]]):
                             MaxB = ListA[i].Attributs[ListOfAttributs[IndB]]
                         i = i + 1
                 StepB = float(MaxB) / float(Bins)
                 Round = str(StepB).split(".")
-                if((len(Round) > 1)and(int(Round[1]) > 0)):
+                if ((len(Round) > 1) and (int(Round[1]) > 0)):
                     StepB = int(Round[0]) + 1
-            i=0
-            while(i < len(ListA)):
-                if(TypeA and TypeB):
+            i = 0
+            while (i < len(ListA)):
+                if (TypeA and TypeB):
                     ValA = ListA[i].Attributs[ListOfAttributs[IndA]]//StepA
-                    ValB = ListA[i].Attributs[ListOfAttributs[IndB]]//StepB  
-                elif(TypeA):
+                    ValB = ListA[i].Attributs[ListOfAttributs[IndB]]//StepB
+                elif (TypeA):
                     ValA = ListA[i].Attributs[ListOfAttributs[IndA]]//StepA
-                    ValB = ListA[i].Attributs[ListOfAttributs[IndB]]    
-                elif(TypeB):
+                    ValB = ListA[i].Attributs[ListOfAttributs[IndB]]
+                elif (TypeB):
                     ValA = ListA[i].Attributs[ListOfAttributs[IndA]]
-                    ValB = ListA[i].Attributs[ListOfAttributs[IndB]]//StepB  
+                    ValB = ListA[i].Attributs[ListOfAttributs[IndB]]//StepB
                 else:
                     ValA = ListA[i].Attributs[ListOfAttributs[IndA]]
-                    ValB = ListA[i].Attributs[ListOfAttributs[IndB]]    
-                if(TypeA and ValA>=Bins):
-                    ValA=Bins-1
-                if(TypeB and ValB>=Bins):
-                    ValB=Bins-1
+                    ValB = ListA[i].Attributs[ListOfAttributs[IndB]]
+                if (TypeA and ValA >= Bins):
+                    ValA = Bins-1
+                if (TypeB and ValB >= Bins):
+                    ValB = Bins - 1
                 Indice = self.IsTupleInData(Data, ValA, ValB)
                 
-                if(Indice == -1):
-                        Data.append([ValA, ValB, 1])          
+                if (Indice == -1):
+                    Data.append([ValA, ValB, 1])
                 else:
                     Data[Indice][2] = Data[Indice][2] + 1
                 i = i + 1;
-            ScaleA=[]
-            ScaleB=[]
-            if(TypeA):
+            ScaleA = []
+            ScaleB = []
+            if (TypeA):
                 i = 0
-                while(i <= (Bins * StepA)+1):
+                while (i <= (Bins * StepA) + 1):
                     ScaleA.append(i)
                     i = i + StepA
-            if(TypeB):
+            if (TypeB):
                 i = 0
-                while(i <= Bins * StepB):
+                while (i <= Bins * StepB):
                     ScaleB.append(i)
                     i = i + StepB
-                    
+
             return (Data, ScaleA,ScaleB, str(ListOfAttributs[IndA]+"/"+ListOfAttributs[IndB]))
-                            
-                        
+
+    def ScaleAndValueStandard(self, ListA, Ind, Bins, Max=0):
+        i = 0
+        ValuesA = []
+        ScaleA = []
+        if (len(ListA) > 0):
+            if (type(ListA[i].Attributs[ListOfAttributs[Ind]]) == type(0) or (type(ListA[i].Attributs[ListOfAttributs[Ind]]) == type(0.0))):
+                while (i < Bins):
+                    ValuesA.append(0);
+                    i = i + 1
+                i = 0
+                if (Max == 0):
+                    while (i < len(ListA)):
+                        if (Max < ListA[i].Attributs[ListOfAttributs[Ind]]):
+                            Max = ListA[i].Attributs[ListOfAttributs[Ind]]
+                        i = i + 1
+                i = 0
+                Step = float(Max) / float(Bins)
+                Round = str(Step).split(".")
+                if ((len(Round) > 1)and(int(Round[1]) > 0)):
+                    Step = int(Round[0]) + 1
+
+                while (i < len(ListA)):
+                    if (ListA[i].Attributs[ListOfAttributs[Ind]] >= Max):
+                        ValuesA[Bins - 1] = ValuesA[Bins - 1] + 1
+                    elif (ListA[i].Attributs[ListOfAttributs[Ind]] < 0):
+                        ValuesA[0] = ValuesA[0] + 1
+                    else:
+                        ValuesA[int(ListA[i].Attributs[ListOfAttributs[Ind]] // Step)] = ValuesA[int(ListA[i].Attributs[ListOfAttributs[Ind]] // Step)] +1
+                    i = i + 1
+                i = 0
+                while (i <= Bins * Step):
+                    ScaleA.append(i)
+                    i = i + Step
+            else:
+                while (i < len(ListA)):
+                    if (ScaleA.count(str(ListA[i].Attributs[ListOfAttributs[Ind]])) == 0):
+                        ScaleA.append(str(ListA[i].Attributs[ListOfAttributs[Ind]]))
+                        ValuesA.append(1)
+                    else:
+                        ValuesA[ScaleA.index(str(ListA[i].Attributs[ListOfAttributs[Ind]]))] = ValuesA[ScaleA.index(str(ListA[i].Attributs[ListOfAttributs[Ind]]))] + 1
+                    i = i + 1
+        return (ValuesA, ScaleA, ListOfAttributs[Ind]);
+
     def IsTupleInData(self, Data, ValA, ValB):
         i = 0
         while(i < len(Data)):
@@ -561,19 +762,20 @@ class HomePage(object):
                 
                     
     def ScaleAndValue(self, ListA, Ind, Bins, Max=0):
+        __short_attr_names = ["ID", "EE", "Ty", "SR", "Pr", "RJ", "RD", "EID", "RN", "SuD", "ED", "StD", "PI", "Ca", "DN", "St", "Re", "Pa", "PP", "CD", "AJ", "PJ", "MT", "PF"]
         i = 0
         ValuesA = []
         ScaleA = []
         if(len(ListA) > 0):
-            if(type(ListA[i].Attributs[ListOfAttributs[Ind]]) == type(0)or(type(ListA[i].Attributs[ListOfAttributs[Ind]]) == type(0.0))):
+            if(type(ListA[i][__short_attr_names[Ind]]) == type(0)or(type(ListA[i][__short_attr_names[Ind]]) == type(0.0))):
                 while(i < Bins):
                     ValuesA.append(0);
                     i = i + 1
                 i = 0
                 if(Max == 0):
                     while(i < len(ListA)):
-                        if(Max < ListA[i].Attributs[ListOfAttributs[Ind]]):
-                            Max = ListA[i].Attributs[ListOfAttributs[Ind]]
+                        if(Max < ListA[i][__short_attr_names[Ind]]):
+                            Max = ListA[i][__short_attr_names[Ind]]
                         i = i + 1
                 i = 0
                 Step = float(Max) / float(Bins)
@@ -582,12 +784,12 @@ class HomePage(object):
                     Step = int(Round[0]) + 1
                 
                 while(i < len(ListA)):
-                    if(ListA[i].Attributs[ListOfAttributs[Ind]] >= Max):
+                    if(ListA[i][__short_attr_names[Ind]] >= Max):
                         ValuesA[Bins - 1] = ValuesA[Bins - 1] + 1
-                    elif(ListA[i].Attributs[ListOfAttributs[Ind]] < 0):
+                    elif(ListA[i][__short_attr_names[Ind]] < 0):
                         ValuesA[0] = ValuesA[0] + 1
                     else:
-                        ValuesA[int(ListA[i].Attributs[ListOfAttributs[Ind]] // Step)] = ValuesA[int(ListA[i].Attributs[ListOfAttributs[Ind]] // Step)] +1
+                        ValuesA[int(ListA[i][__short_attr_names[Ind]] // Step)] = ValuesA[int(ListA[i][__short_attr_names[Ind]] // Step)] +1
                     i = i + 1
                 i=0
                 while(i <= Bins * Step):
@@ -595,11 +797,11 @@ class HomePage(object):
                     i = i + Step
             else:
                 while(i < len(ListA)):
-                    if(ScaleA.count(str(ListA[i].Attributs[ListOfAttributs[Ind]])) == 0):
-                        ScaleA.append(str(ListA[i].Attributs[ListOfAttributs[Ind]]))
+                    if(ScaleA.count(str(ListA[i][__short_attr_names[Ind]])) == 0):
+                        ScaleA.append(str(ListA[i][__short_attr_names[Ind]]))
                         ValuesA.append(1)
                     else:
-                        ValuesA[ScaleA.index(str(ListA[i].Attributs[ListOfAttributs[Ind]]))] = ValuesA[ScaleA.index(str(ListA[i].Attributs[ListOfAttributs[Ind]]))] + 1
+                        ValuesA[ScaleA.index(str(ListA[i][__short_attr_names[Ind]]))] = ValuesA[ScaleA.index(str(ListA[i][__short_attr_names[Ind]]))] + 1
                     i = i + 1
         return (ValuesA, ScaleA, ListOfAttributs[Ind]);
         
@@ -740,15 +942,14 @@ class HomePage(object):
         String = String + "</tr>"
         From = (Page - 1) * ResultToPrint
         To = Page * ResultToPrint
-        while((From < To)and(From < len(ListB))):
-            String = String + ListB[From].toString((From % 2), ListOfColumns)
-            From = From + 1
+        for index, elem in enumerate(ListB):
+            String = String + elem.toString(index%2, ListOfColumns)
         return String
     index.exposed = True 
    
 class Initializer(object):
     
-    def Actualization(self):
+    def Actualization(self, db_query):
         possible_source = ['file','web','db']
         source = 'db'
         if source == 'web':
@@ -760,16 +961,18 @@ class Initializer(object):
             jsonContent = json.loads(JSONFile.read())
         elif source == 'db':
             ### NEW super cool stuff
-            dbData = urllib2.urlopen('http://cms-pdmv-stats:5984/stats/_all_docs?include_docs=true')
-            jsonContent = map(lambda c: c['doc'], filter(lambda r : not r['id'].startswith('_'), json.loads(dbData.read())['rows']))
-        
-        ## no L = Content.split("{'pdmv")
-        i = 1    
+            ##go to view to get data with params!
+            print "##DB_QUERY: %s" %(db_query)
+            dbData = urllib2.urlopen('http://cms-pdmv-stats:5984/stats/'+db_query)
+            data = json.loads(dbData.read())
+            n_results = data['total_rows']
+            print "Found %s result(-s)"%(data['total_rows'])
+            jsonContent = map(lambda c: c['doc'], filter(lambda r : not r['id'].startswith('_'), data['rows'])) ##needs update
+        i = 0
         while(i < len(jsonContent)):
             Sim = Simulation()
             Sim._init_()
             Sim.Attributs["SIMID"] = i
-            ### print jsonContent[i]
             Sim.Attributs["PDMV expected events"] = int(jsonContent[i]["pdmv_expected_events"])
             Sim.Attributs["PDMV type"] = str(jsonContent[i]["pdmv_type"])
             Sim.Attributs["PDMV status from reqmngr"] = str(jsonContent[i]["pdmv_status_from_reqmngr"])
@@ -817,10 +1020,8 @@ class Initializer(object):
         while(i < len(ListOfSimulationsTemp)):
             ListOfSimulations.append(ListOfSimulationsTemp[i])
             i = i + 1
-        threading.Timer(900,self.Actualization).start() 
-        global DateHeartBeat 
-        DateHeartBeat = time.strftime('%d/%m/%y %H:%M', time.localtime())  
         del(ListOfSimulationsTemp[:])
+        return n_results
       
     def getStr(self, string, key):
         i = string.find(key)
