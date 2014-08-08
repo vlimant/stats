@@ -224,6 +224,7 @@ def get_dataset_name(reqname):
                       'AOD',
                       'SIM-RAW-RECO',
                       'DQM' ,
+                      'GEN-SIM',
                       'RAW-RECO',
                       'USER',
                       'ALCARECO']
@@ -858,6 +859,8 @@ def parallel_test(arguments,force=False):
       req["status"]='announced'
     if req["request_name"]=='etorassa_JME-Summer12-00060_batch1_v2__120209_133317_6868':
       req["status"]='announced'
+    if req["request_name"]=='jbadillo_TOP-Summer12-00234_00073_v0__140124_154429_3541':
+      req["status"]='announced'
     ##faking rejected status
     if req["request_name"]=='spinoso_SUS-Summer12pLHE-00001_4_v1_STEP0ATCERN_130914_172555_5537':
       req["status"]="rejected"
@@ -901,7 +904,7 @@ def parallel_test(arguments,force=False):
       if pdmv_request_dict['pdmv_dataset_name']=='?' : skewed=True
       if pdmv_request_dict['pdmv_evts_in_DAS']<0 : skewed=True
       if pdmv_request_dict['pdmv_evts_in_DAS']==0 and req["status"] in ['announced']: skewed=True
-      if pdmv_request_dict['pdmv_status_in_DAS']=='PRODUCTION' and req["status"] in ['announced','normal-archived']: skewed=True
+      if pdmv_request_dict['pdmv_status_in_DAS'] in [None,'PRODUCTION'] and req["status"] in ['announced','normal-archived']: skewed=True
 
       if pdmv_request_dict["pdmv_status_from_reqmngr"]!=req_status and req_status!="normal-archived":
         print "CHANGE OF STATUS, do something !"
