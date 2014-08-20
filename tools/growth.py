@@ -4,6 +4,7 @@ import pprint
 import ROOT
 import copy
 import time
+import os
 
 def plotGrowth(thisDoc,i,force=False,wait=False):
     one=thisDoc['pdmv_request_name']
@@ -28,38 +29,65 @@ def plotGrowth(thisDoc,i,force=False,wait=False):
     
     print "plotting",one
     maxYaxis=Nexpected
-    revs=thisDoc['_revs_info']
-    revs.reverse()
-    canStopNext=False
-    earliest=0
-    for rev in revs:
-        try:
-            nextOne=i.get_file_info_rev(one,rev['rev'])
-        except:
-            continue
+    
+    if 'pdmv_monitor_history' in thisDoc:
+        print "getting history from history"
+        canStopNext=False
+        earliest=0
+        for nextOne in thisDoc['pdmv_monitor_history']:
+            up=  time.mktime(time.strptime(nextOne['pdmv_monitor_time'])) - today
+            up/= 60.*60.*24.*7.
 
-        if nextOne['pdmv_status_from_reqmngr']=='announced':
-            canStopNext=True
-        if canStopNext:
-            continue
+            N=nextOne['pdmv_evts_in_DAS'] + nextOne['pdmv_open_evts_in_DAS']
+            #do not put too many zero points
+            if N<1: continue
+
+
+            N/=Nunit
+            gr.SetPoint(grn,up,N)
+            grc.SetPoint(grn,up,nextOne['pdmv_evts_in_DAS']/Nunit)
+            grn+=1
         
-        up=  time.mktime(time.strptime(nextOne['pdmv_monitor_time'])) - today
-        up/= 60.*60.*24.*7.
+            if maxYaxis<N:
+                maxYaxis=N
+            if earliest>up:
+                earliest=up
+            
 
-        N=nextOne['pdmv_evts_in_DAS'] + nextOne['pdmv_open_evts_in_DAS']
-        #do not put too many zero points
-        if N<1: continue
 
-
-        N/=Nunit
-        gr.SetPoint(grn,up,N)
-        grc.SetPoint(grn,up,nextOne['pdmv_evts_in_DAS']/Nunit)
-        grn+=1
+    else:
+        revs=thisDoc['_revs_info']
+        revs.reverse()
+        canStopNext=False
+        earliest=0
+        for rev in revs:
+            try:
+                nextOne=i.get_file_info_rev(one,rev['rev'])
+            except:
+                continue
+            
+            if nextOne['pdmv_status_from_reqmngr']=='announced':
+                canStopNext=True
+            if canStopNext:
+                continue
         
-        if maxYaxis<N:
-            maxYaxis=N
-        if earliest>up:
-            earliest=up
+            up=  time.mktime(time.strptime(nextOne['pdmv_monitor_time'])) - today
+            up/= 60.*60.*24.*7.
+            
+            N=nextOne['pdmv_evts_in_DAS'] + nextOne['pdmv_open_evts_in_DAS']
+            #do not put too many zero points
+            if N<1: continue
+
+
+            N/=Nunit
+            gr.SetPoint(grn,up,N)
+            grc.SetPoint(grn,up,nextOne['pdmv_evts_in_DAS']/Nunit)
+            grn+=1
+        
+            if maxYaxis<N:
+                maxYaxis=N
+            if earliest>up:
+                earliest=up
 
     if grn!=0:
         
@@ -82,7 +110,11 @@ def plotGrowth(thisDoc,i,force=False,wait=False):
         expected.SetLineWidth(4)
         expected.SetLineColor(2)
         expected.Draw()
-        c.Print('/afs/cern.ch/cms/PPD/PdmV/web/stats/growth/'+one+'.gif')
+        dir,file = one.rsplit('_', 1)
+        dir = os.path.normpath(dir.replace('_', '/'))
+        os.system('mkdir -p /afs/cern.ch/cms/PPD/PdmV/web/stats/growth/%s ' % (dir))
+        c.Print('/afs/cern.ch/cms/PPD/PdmV/web/stats/growth/%s/%s.gif' % (dir, file))
+        #c.Print('/afs/cern.ch/cms/PPD/PdmV/web/stats/growth/'+one+'.gif')
 
         if wait:
             extrap=ROOT.TF1('extrap','[0]*x+[1]',earliest*0.25,0.01)
