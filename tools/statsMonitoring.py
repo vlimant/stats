@@ -1247,6 +1247,19 @@ def parallel_test(arguments,force=False):
       #do the expensive procedure rarely or for request which have been update more than 2 days ago
       print "\tSumming for",req_name
       status,evts,openN=get_status_nevts_from_dbs(pdmv_request_dict["pdmv_dataset_name"])
+      ## aggregate number of events for all output datasets
+      pdmv_request_dict['pdmv_dataset_statuses'] = {}
+      for other_ds in pdmv_request_dict['pdmv_dataset_list']:
+        if other_ds == pdmv_request_dict["pdmv_dataset_name"]:
+          other_status,other_evts,other_openN = status,evts,openN
+        else:
+          other_status,other_evts,other_openN = get_status_nevts_from_dbs( other_ds )
+        pdmv_request_dict['pdmv_dataset_statuses'][other_ds] = {
+          'pdmv_status_in_DAS' : other_status,
+          'pdmv_evts_in_DAS' : other_evts,
+          'pdmv_open_evts_in_DAS' : other_openN
+          }
+          
       if status:
         print "\t\tUpdating %s %s %s"%( status,evts,openN )
         pdmv_request_dict["pdmv_status_in_DAS"]=status
