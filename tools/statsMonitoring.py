@@ -1068,7 +1068,7 @@ def parallel_test(arguments,force=False):
       pdmv_request_dict["pdmv_submission_date"]=datelist_to_str(dict_from_workload['request']['schema']['RequestDate'])
       pdmv_request_dict["pdmv_submission_time"]=timelist_to_str(dict_from_workload['request']['schema']['RequestDate'])
       if DEBUGME: print "----"
-      if  pdmv_request_dict["pdmv_submission_date"][:2]=="11":
+      if  pdmv_request_dict["pdmv_submission_date"][:2] in ["11","12"]:
         print "Very old request "+req_name
         return {}
 
