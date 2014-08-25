@@ -338,38 +338,58 @@ def get_expected_events_withdict(dict_from_workload):
     rne=dict_from_workload['request']['schema']['RequestNumEvents']
   elif 'RequestSizeEvents' in dict_from_workload['request']['schema']:
     rne=dict_from_workload['request']['schema']['RequestSizeEvents']
+  elif 'Task1' in dict_from_workload['request']['schema'] and 'RequestNumEvents' in dict_from_workload['request']['schema']['Task1']:
+    rne=dict_from_workload['request']['schema']['Task1']['RequestNumEvents']
   else:
     rne=None
     
-  if not 'FilterEfficiency' in dict_from_workload['request']['schema']:
-    f=1.
-  else:
+  if 'FilterEfficiency' in dict_from_workload['request']['schema']:
     f=float(dict_from_workload['request']['schema']['FilterEfficiency'])
-
-  if not 'InputDatasets' in dict_from_workload['request']['schema']:
-    ids=[]
+  elif 'Task1' in dict_from_workload['request']['schema'] and 'FilterEfficiency' in dict_from_workload['request']['schema']['Task1']:
+    f=float(dict_from_workload['request']['schema']['Task1']['FilterEfficiency'])
   else:
+    f=1.
+    
+  if 'InputDatasets' in dict_from_workload['request']['schema']:
     try:
       ids=dict_from_workload['request']['schema']['InputDatasets'].split(',')
     except:
       ids=dict_from_workload['request']['schema']['InputDatasets']
+  elif 'Task1' in dict_from_workload['request']['schema'] and  'InputDataset' in dict_from_workload['request']['schema']['Task1']:
+    try:
+      ids=dict_from_workload['request']['schema']['Task1']['InputDataset'].split(',')
+    except:
+      ids=dict_from_workload['request']['schema']['Task1']['InputDataset']
+  else:
+    ids=[]
+
     
 
-  if not 'BlockWhitelist' in dict_from_workload['request']['schema']:
-    bwl=[]
-  else:
+  if 'BlockWhitelist' in dict_from_workload['request']['schema']:
     try:
       bwl=dict_from_workload['request']['schema']['BlockWhitelist'].split(',')
     except:
       bwl=dict_from_workload['request']['schema']['BlockWhitelist']
-
-  if not 'RunWhitelist' in dict_from_workload['request']['schema']:
-    rwl=[]
+  elif 'Task1' in dict_from_workload['request']['schema'] and  'BlockWhitelist' in dict_from_workload['request']['schema']['Task1']:
+    try:
+      bwl=dict_from_workload['request']['schema']['Task1']['BlockWhitelist'].split(',')
+    except:
+      bwl=dict_from_workload['request']['schema']['Task1']['BlockWhitelist']
   else:
+    bwl=[]
+
+  if 'RunWhitelist' in dict_from_workload['request']['schema']:
     try:
       rwl=dict_from_workload['request']['schema']['RunWhitelist'].split(',')
     except:
       rwl=dict_from_workload['request']['schema']['RunWhitelist']
+  elif 'Task1' in dict_from_workload['request']['schema'] and 'RunWhitelist' in dict_from_workload['request']['schema']['Task1']:
+    try:
+      rwl=dict_from_workload['request']['schema']['Task1']['RunWhitelist'].split(',')
+    except:
+      rwl=dict_from_workload['request']['schema']['Task1']['RunWhitelist']
+  else:
+    rwl=[]
     
   return get_expected_events_withinput(rne,
                                        ids,
@@ -1068,7 +1088,7 @@ def parallel_test(arguments,force=False):
       pdmv_request_dict["pdmv_submission_date"]=datelist_to_str(dict_from_workload['request']['schema']['RequestDate'])
       pdmv_request_dict["pdmv_submission_time"]=timelist_to_str(dict_from_workload['request']['schema']['RequestDate'])
       if DEBUGME: print "----"
-      if  pdmv_request_dict["pdmv_submission_date"][:2]=="11":
+      if  pdmv_request_dict["pdmv_submission_date"][:2] in ["11","12"]:
         print "Very old request "+req_name
         return {}
 
