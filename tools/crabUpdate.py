@@ -145,9 +145,13 @@ def updateStats( task_name , rid=None):
                  "pdmv_dataset_list" : outs.keys(),
                  "pdmv_dataset_name" : outs.keys()[0],
                  "pdmv_dataset_statuses" : {}, 
-                 "pdmv_completion_in_DAS" : float( min(outs.values()) / statsDoc["pdmv_expected_events"]),
+                 "pdmv_completion_in_DAS" : float("%2.2f" % (100. * min(outs.values()) / statsDoc["pdmv_expected_events"])),
                  "pdmv_monitor_time" : time.asctime(),
                  }
+        ## calculate ETA
+        from statsMonitoring import get_running_days,calc_eta
+        content["pdmv_running_days"] = get_running_days(content["pdmv_submission_date"])
+        content["pdmv_completion_eta_in_DAS"] = calc_eta(content["pdmv_completion_in_DAS"],content["pdmv_running_days"])
         for o in outs: ## this is really a mandatory information
             content["pdmv_dataset_statuses"][o]={"pdmv_open_evts_in_DAS":0,
                                                  "pdmv_evts_in_DAS" : outs[o],
@@ -166,7 +170,8 @@ def updateStats( task_name , rid=None):
         print "making the growth plot"
         plotGrowth(statsDoc,None)
         ## pushing back to the db
-        print "pushing",statsDoc,"back to stats"
+        print "pushing",task_name,"back to stats"
+        pprint.pprint( statsDoc )
         statsCouch.update_file( task_name, json.dumps(statsDoc) )
     else:
         print status 
