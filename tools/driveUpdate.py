@@ -45,7 +45,6 @@ def insertOne(req):
         return False
     updatedDoc['_id'] = docid
     statsCouch.create_file(json.dumps(updatedDoc))
-    #pprint.pprint(updatedDoc)
     return docid
 
 def worthTheUpdate(new,old):
@@ -309,6 +308,11 @@ def main_do( options ):
         #insertAll(req_list,docs,options.search,limit)
 
         if options.search:
+            if ":" in options.search:
+                ## find a way to force enter a request for which we know the status
+                req_list.append({"request_name" : options.search.split(":")[0], "status" : options.search.split(":")[1] , "type": None})
+                options.search=options.search.split(":")[0]
+                print req_list
             req_list = filter( lambda req : options.search in req["request_name"], req_list )
             #print len(req_list)
 
@@ -398,6 +402,11 @@ def main_do( options ):
                 req_list=filter( lambda req : any( map(lambda rid : rid in req["request_name"], rids)), req_list)
 
         if options.search:
+            if ":" in options.search:
+                ## find a way to force enter a request for which we know the status
+                req_list.append({"request_name" : options.search.split(":")[0], "status" : options.search.split(":")[1] , "type": None})
+                options.search=options.search.split(":")[0]
+
             if options.force:
                 FORCE=True
             docs=filter( lambda docid : options.search in docid, docs)
@@ -405,6 +414,9 @@ def main_do( options ):
                 req_list=filter( lambda req : options.search in req["request_name"], req_list)
                 if len(req_list):
                     pprint.pprint(req_list)
+
+
+
         if limit:
             docs = docs[0:limit]
             
