@@ -30,8 +30,11 @@ class Interface(object):
         request = urllib2.Request(self.url_address+'/'+fileID+'?rev='+rev)
         request.add_header('Content-Type', 'text/plain')
         request.get_method = lambda: 'DELETE'
-        url = self.opener.open(request)
-        return json.loads(url.read())
+        try:
+            url = self.opener.open(request)
+            return json.loads(url.read())
+        except:
+            print "Failed delete"
     
     def get_file_info(self, fileID,trail=''):
         request = urllib2.Request(self.url_address+'/'+fileID+trail)
