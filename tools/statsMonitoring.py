@@ -911,7 +911,13 @@ def parallel_test(arguments,force=False):
     if DEBUGME: print "--"
     #transform the workload in a dictionnary for convenience , can also be made an object
     dict_from_workload={}
+    if not req["type"]:
+      if not dict_from_workload: dict_from_workload=getDictFromWorkload(req_name)
+      if not dict_from_workload: return {}  
+      req["type"]=dict_from_workload['request']['schema']['RequestType']
+      #req["status"]='limbo'
 
+    req_status=req["status"]
 
     # check if in the old and in complete_stati, just copy and go on
     matching_reqs=filter(lambda oldreq: oldreq['pdmv_request_name']==req_name ,old_useful_info)
@@ -1029,7 +1035,7 @@ def parallel_test(arguments,force=False):
         
 
       if 'amaltaro' in req_name and ('type' in req and req['type'] == 'TaskChain'):
-        skewed=False
+        skewed=False ## by-pass for a lot of relvals with Alan
 
       #needs to be put by hand once in all workflows
       if (pdmv_request_dict['pdmv_status_from_reqmngr'] in complete_stati) and ('pdmv_performance' not in pdmv_request_dict or pdmv_request_dict['pdmv_performance']=={}):
@@ -1104,7 +1110,7 @@ def parallel_test(arguments,force=False):
     pdmv_request_dict["pdmv_request"]=req        
     
     # check the status
-    req_status=req["status"]
+      
     pdmv_request_dict["pdmv_status_from_reqmngr"]=req_status
     
     if req_status in priority_changable_stati:
@@ -1413,7 +1419,8 @@ def parallel_test(arguments,force=False):
       pdmv_request_dict['pdmv_performance']=Performances(req_name)
     #else:
     #  print pdmv_request_dict['pdmv_performance']
-    
+
+    #pprint( pdmv_request_dict )
     return pdmv_request_dict
 
   except:
