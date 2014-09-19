@@ -151,7 +151,7 @@ def updateOne(docid,req_list):
         return False
     #if pprint.pformat(updatedDoc)!=pprint.pformat(thisDoc):
     if worthTheUpdate(updatedDoc,thisDoc):
-        to_get=['pdmv_monitor_time','pdmv_evts_in_DAS','pdmv_open_evts_in_DAS']
+        to_get=['pdmv_monitor_time','pdmv_evts_in_DAS','pdmv_open_evts_in_DAS','pdmv_dataset_statuses']
         if not 'pdmv_monitor_history' in updatedDoc:
             ## do the migration
             thisDoc_bis = statsCouch.get_file_info_withrev(docid)
@@ -165,13 +165,15 @@ def updateOne(docid,req_list):
 
                 history.append({})
                 for g in to_get:
-                    history[-1][g] = nextOne[g]
+                    if not g in nextOne: continue
+                    history[-1][g] = copy.deepcopy(nextOne[g])
 
             updatedDoc['pdvm_monitor_history'] = history
         if 'pdmv_monitor_history' in updatedDoc:
             rev = {}
             for g in to_get:
-                rev[g] = updatedDoc[g]
+                if not g in updatedDoc: continue
+                rev[g] = copy.deepcopy(updatedDoc[g])
             updatedDoc['pdmv_monitor_history'].insert(0, rev)
 
         
