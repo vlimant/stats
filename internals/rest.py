@@ -32,6 +32,16 @@ class GetOne(RestIndex):
         data = f.read()
         return data
 
+class ProducesDN(RestIndex):
+    def __init__(self):
+        pass
+    def GET(self, *args):
+        #data = [args[0],args[1]]
+        __dname = "/".join(args)
+        f = urllib2.urlopen('http://cms-pdmv-stats:5984/stats/_fti/_design/lucene/search?q=DN:/%s&include_docs=true' %(__dname))
+        data = f.read()
+        return data
+
 class searchOption(object):
     def __init__(self, search):
         self.db = 'http://cms-pdmv-stats.cern.ch'

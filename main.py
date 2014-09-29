@@ -8,7 +8,7 @@ import traceback
 import subprocess
 import sys
 from internals.display import Simulation, HomePage,Initializer, ListOfSimulations
-from internals.rest import RestIndex, GetOne, UpdateOne
+from internals.rest import RestIndex, GetOne, UpdateOne, ProducesDN
 
 
 #Initialisation , first define the last heart beat to not get and error during the processing of the JSON file
@@ -51,5 +51,6 @@ root.Db_all = getAllDocs
 root.restapi = RestIndex()
 root.restapi.get_one = GetOne()
 root.restapi.update = UpdateOne()
+root.restapi.produces = ProducesDN()
 #Initializer().Actualization()
 cherrypy.quickstart(root, config='prod.conf')
