@@ -150,7 +150,11 @@ def generic_post(url, data_input):
     return ret_val
 #-------------------------------------------------------------------------------
 
-def get_requests_list(pattern=""):
+def get_requests_list(pattern="", not_in_wmstats=False):
+
+    if not_in_wmstats:
+      return get_requests_list_old(pattern)
+    
     opener=urllib2.build_opener(X509CertOpen())  
     url="https://cmsweb.cern.ch/wmstats/_design/WMStats/_view/requestByStatusAndType?stale=update_after"
     datareq = urllib2.Request(url)
@@ -220,6 +224,7 @@ def get_dataset_name(reqname):
                       'AOD',
                       'SIM-RAW-RECO',
                       'DQM' ,
+                      'GEN-SIM',
                       'RAW-RECO',
                       'USER',
                       'ALCARECO']
@@ -333,38 +338,62 @@ def get_expected_events_withdict(dict_from_workload):
     rne=dict_from_workload['request']['schema']['RequestNumEvents']
   elif 'RequestSizeEvents' in dict_from_workload['request']['schema']:
     rne=dict_from_workload['request']['schema']['RequestSizeEvents']
+  elif 'Task1' in dict_from_workload['request']['schema'] and 'RequestNumEvents' in dict_from_workload['request']['schema']['Task1']:
+    rne=dict_from_workload['request']['schema']['Task1']['RequestNumEvents']
   else:
     rne=None
     
-  if not 'FilterEfficiency' in dict_from_workload['request']['schema']:
-    f=1.
-  else:
+  if 'FilterEfficiency' in dict_from_workload['request']['schema']:
     f=float(dict_from_workload['request']['schema']['FilterEfficiency'])
-
-  if not 'InputDatasets' in dict_from_workload['request']['schema']:
-    ids=[]
+  elif 'Task1' in dict_from_workload['request']['schema'] and 'FilterEfficiency' in dict_from_workload['request']['schema']['Task1']:
+    f=float(dict_from_workload['request']['schema']['Task1']['FilterEfficiency'])
+    ## temporary work-around for request manager not creating enough jobs
+    ## https://github.com/dmwm/WMCore/issues/5336 => request manager
+    ## https://github.com/cms-PdmV/cmsPdmV/pull/655 => McM
+    if rne: rne *= f
   else:
+    f=1.
+    
+  if 'InputDatasets' in dict_from_workload['request']['schema']:
     try:
       ids=dict_from_workload['request']['schema']['InputDatasets'].split(',')
     except:
       ids=dict_from_workload['request']['schema']['InputDatasets']
+  elif 'Task1' in dict_from_workload['request']['schema'] and  'InputDataset' in dict_from_workload['request']['schema']['Task1']:
+    try:
+      ids=dict_from_workload['request']['schema']['Task1']['InputDataset'].split(',')
+    except:
+      ids=dict_from_workload['request']['schema']['Task1']['InputDataset']
+  else:
+    ids=[]
+
     
 
-  if not 'BlockWhitelist' in dict_from_workload['request']['schema']:
-    bwl=[]
-  else:
+  if 'BlockWhitelist' in dict_from_workload['request']['schema']:
     try:
       bwl=dict_from_workload['request']['schema']['BlockWhitelist'].split(',')
     except:
       bwl=dict_from_workload['request']['schema']['BlockWhitelist']
-
-  if not 'RunWhitelist' in dict_from_workload['request']['schema']:
-    rwl=[]
+  elif 'Task1' in dict_from_workload['request']['schema'] and  'BlockWhitelist' in dict_from_workload['request']['schema']['Task1']:
+    try:
+      bwl=dict_from_workload['request']['schema']['Task1']['BlockWhitelist'].split(',')
+    except:
+      bwl=dict_from_workload['request']['schema']['Task1']['BlockWhitelist']
   else:
+    bwl=[]
+
+  if 'RunWhitelist' in dict_from_workload['request']['schema']:
     try:
       rwl=dict_from_workload['request']['schema']['RunWhitelist'].split(',')
     except:
       rwl=dict_from_workload['request']['schema']['RunWhitelist']
+  elif 'Task1' in dict_from_workload['request']['schema'] and 'RunWhitelist' in dict_from_workload['request']['schema']['Task1']:
+    try:
+      rwl=dict_from_workload['request']['schema']['Task1']['RunWhitelist'].split(',')
+    except:
+      rwl=dict_from_workload['request']['schema']['Task1']['RunWhitelist']
+  else:
+    rwl=[]
     
   return get_expected_events_withinput(rne,
                                        ids,
@@ -834,8 +863,10 @@ def getDictFromWorkload(req_name):
 
 
 numberofrequestnameprocessed=0
+countOld=0
 def parallel_test(arguments,force=False):
   DEBUGME=False
+  global countOld
   req,old_useful_info = arguments
   try:
     if DEBUGME: print "+"
@@ -851,6 +882,8 @@ def parallel_test(arguments,force=False):
     if req["request_name"]=='etorassa_EWK-Summer12_DR53X-00089_T1_IT_CNAF_MSS_batch77res_v1__121009_233442_92':
       req["status"]='announced'
     if req["request_name"]=='etorassa_JME-Summer12-00060_batch1_v2__120209_133317_6868':
+      req["status"]='announced'
+    if req["request_name"]=='jbadillo_TOP-Summer12-00234_00073_v0__140124_154429_3541':
       req["status"]='announced'
     ##faking rejected status
     if req["request_name"]=='spinoso_SUS-Summer12pLHE-00001_4_v1_STEP0ATCERN_130914_172555_5537':
@@ -895,7 +928,7 @@ def parallel_test(arguments,force=False):
       if pdmv_request_dict['pdmv_dataset_name']=='?' : skewed=True
       if pdmv_request_dict['pdmv_evts_in_DAS']<0 : skewed=True
       if pdmv_request_dict['pdmv_evts_in_DAS']==0 and req["status"] in ['announced']: skewed=True
-      if pdmv_request_dict['pdmv_status_in_DAS']=='PRODUCTION' and req["status"] in ['announced','normal-archived']: skewed=True
+      if pdmv_request_dict['pdmv_status_in_DAS'] in [None,'PRODUCTION'] and req["status"] in ['announced','normal-archived']: skewed=True
 
       if pdmv_request_dict["pdmv_status_from_reqmngr"]!=req_status and req_status!="normal-archived":
         print "CHANGE OF STATUS, do something !"
@@ -912,9 +945,10 @@ def parallel_test(arguments,force=False):
         ## Oct 9 : > 20
         ## OCt 11: > 10
         ## Oct 12: > 5 ## and stay like this
-        if deltaUpdate > 10:
+        if deltaUpdate > 10 and countOld<=100:
           print 'too long ago'
           skewed=True
+          countOld+=1
 
       if not 'pdmv_monitor_time' in pdmv_request_dict:
         skewed=True
@@ -1058,7 +1092,7 @@ def parallel_test(arguments,force=False):
       pdmv_request_dict["pdmv_submission_date"]=datelist_to_str(dict_from_workload['request']['schema']['RequestDate'])
       pdmv_request_dict["pdmv_submission_time"]=timelist_to_str(dict_from_workload['request']['schema']['RequestDate'])
       if DEBUGME: print "----"
-      if  pdmv_request_dict["pdmv_submission_date"][:2]=="11":
+      if  pdmv_request_dict["pdmv_submission_date"][:2] in ["11","12"]:
         print "Very old request "+req_name
         return {}
 
@@ -1237,6 +1271,19 @@ def parallel_test(arguments,force=False):
       #do the expensive procedure rarely or for request which have been update more than 2 days ago
       print "\tSumming for",req_name
       status,evts,openN=get_status_nevts_from_dbs(pdmv_request_dict["pdmv_dataset_name"])
+      ## aggregate number of events for all output datasets
+      pdmv_request_dict['pdmv_dataset_statuses'] = {}
+      for other_ds in pdmv_request_dict['pdmv_dataset_list']:
+        if other_ds == pdmv_request_dict["pdmv_dataset_name"]:
+          other_status,other_evts,other_openN = status,evts,openN
+        else:
+          other_status,other_evts,other_openN = get_status_nevts_from_dbs( other_ds )
+        pdmv_request_dict['pdmv_dataset_statuses'][other_ds] = {
+          'pdmv_status_in_DAS' : other_status,
+          'pdmv_evts_in_DAS' : other_evts,
+          'pdmv_open_evts_in_DAS' : other_openN
+          }
+          
       if status:
         print "\t\tUpdating %s %s %s"%( status,evts,openN )
         pdmv_request_dict["pdmv_status_in_DAS"]=status

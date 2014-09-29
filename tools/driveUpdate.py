@@ -10,6 +10,7 @@ import optparse
 import time
 import traceback
 import os
+import sys
 
 FORCE=False
 
@@ -32,7 +33,8 @@ def insertAll(req_list,docs,pattern=None,limit=None):
         if insertOne(req):
             newentries+=1
     print newentries,"inserted"
-    
+
+countOld=0
 def insertOne(req):
     global statsCouch
     from statsMonitoring import parallel_test
@@ -49,6 +51,7 @@ def insertOne(req):
 def worthTheUpdate(new,old):
     ##make a tighter selection on when to update in couchDB to not overblow it with 2 update per hour ...
     global FORCE
+    global countOld
     if FORCE: 
         return True
 
@@ -67,7 +70,7 @@ def worthTheUpdate(new,old):
 
     
     if old!=new:
-
+        ## what about monitor time ???? that is different ?
         if set(old.keys())!=set(new.keys()):
             ## addign a new parameter
             return True
@@ -101,7 +104,9 @@ def worthTheUpdate(new,old):
         uptime=time.mktime(time.strptime(new['pdmv_monitor_time']))
         oldtime=time.mktime(time.strptime(old['pdmv_monitor_time']))
         deltaUpdate = (uptime-oldtime) / (60. * 60. * 24.)
-        if deltaUpdate>10:
+        ### more than 10 days old => update
+        if deltaUpdate>10 and countOld<=30:
+            countOld+=1
             return True
         ##otherwise do not update, even with minor changes
         print "minor changes to",new['pdmv_request_name'],n_more,"more events for",f_more
@@ -146,6 +151,32 @@ def updateOne(docid,req_list):
         return False
     #if pprint.pformat(updatedDoc)!=pprint.pformat(thisDoc):
     if worthTheUpdate(updatedDoc,thisDoc):
+        to_get=['pdmv_monitor_time','pdmv_evts_in_DAS','pdmv_open_evts_in_DAS','pdmv_dataset_statuses']
+        if not 'pdmv_monitor_history' in updatedDoc:
+            ## do the migration
+            thisDoc_bis = statsCouch.get_file_info_withrev(docid)
+            revs = thisDoc_bis['_revs_info']
+            history=[]
+            for rev in revs:
+                try:
+                    nextOne=statsCouch.get_file_info_rev(docid, rev['rev'])
+                except:
+                    continue
+
+                history.append({})
+                for g in to_get:
+                    if not g in nextOne: continue
+                    history[-1][g] = copy.deepcopy(nextOne[g])
+
+            updatedDoc['pdvm_monitor_history'] = history
+        if 'pdmv_monitor_history' in updatedDoc:
+            rev = {}
+            for g in to_get:
+                if not g in updatedDoc: continue
+                rev[g] = copy.deepcopy(updatedDoc[g])
+            updatedDoc['pdmv_monitor_history'].insert(0, rev)
+
+        
         try:
             statsCouch.update_file(docid,json.dumps(updatedDoc))
             #pprint.pprint(updatedDoc)
@@ -220,12 +251,35 @@ def main():
                       default=False,
                       help="drives the update from submitted requests in McM",
                       action="store_true")
+    parser.add_option("--nowmstats",
+                      default=False,
+                      help="Goes back to query the full content of request manager",
+                      action="store_true")
+    parser.add_option("--check",
+                      default=False,
+                      help="Prevent two from running at the same time",
+                      action="store_true")
     
     options,args=parser.parse_args()
 
-    main_do( options )
+    return main_do( options )
 
 def main_do( options ):
+
+    if options.check:
+        checks=['ps -f -u $USER']
+        for arg in sys.argv[1:]:
+            checks.append('grep "%s"'%(arg.split('/')[-1].replace('--','')))
+        checks.append('grep -v grep')
+        c = " | ".join(checks)
+        check=filter(None,os.popen("|".join(checks)).read().split('\n'))
+        if len(check)!=1:
+            print "already running with that exact setting"
+            print check
+            sys.exit(1)
+        else:
+            print "ok to operate"
+    
     start_time = time.asctime()
     global statsCouch,docs,FORCE
     #interface to the couchDB
@@ -325,14 +379,13 @@ def main_do( options ):
         ## get from wm couch
         from statsMonitoring import parallel_test,get_requests_list
         print "Getting all req ..."
-        req_list = get_requests_list()
+        req_list = get_requests_list( not_in_wmstats = options.nowmstats)
         print "... done"
         
         ## unthreaded
         #updateSeveral(docs,req_list,pattern=None)
 
         if options.mcm:
-            import sys
             sys.path.append('/afs/cern.ch/cms/PPD/PdmV/tools/McM/')
             from rest import restful
             mcm = restful(dev=False,cookie='/afs/cern.ch/user/p/pdmvserv/private/prod-cookie.txt')
@@ -380,7 +433,7 @@ def main_do( options ):
                 withRevisions=statsCouch.get_file_info_withrev(r)
                 plotGrowth(withRevisions,statsCouch,force=FORCE)
                 ## notify McM for update !!
-                if (withRevisions['pdmv_prep_id'] not in ['No-Prepid-Found','']) and options.inspect:
+                if (withRevisions['pdmv_prep_id'].strip() not in ['No-Prepid-Found','','None']) and options.inspect and '_' not in withRevisions['pdmv_prep_id']:
                     inspect='curl -s -k --cookie ~/private/prod-cookie.txt https://cms-pdmv.cern.ch/mcm/restapi/requests/inspect/%s' % withRevisions['pdmv_prep_id']
                     os.system(inspect)
             except:
