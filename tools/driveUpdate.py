@@ -115,6 +115,28 @@ def worthTheUpdate(new,old):
     else:
         return False
 
+def compare_dictionaries(dict1, dict2):
+     if dict1 == None or dict2 == None:
+         return False
+
+     if type(dict1) is not dict or type(dict2) is not dict:
+         return False
+
+     shared_keys = set(dict2.keys()) & set(dict2.keys())
+
+     if not ( len(shared_keys) == len(dict1.keys()) and len(shared_keys) == len(dict2.keys())):
+         return False
+
+
+     dicts_are_equal = True
+     for key in dict1.keys():
+         if type(dict1[key]) is dict:
+             dicts_are_equal = dicts_are_equal and compare_dictionaries(dict1[key],dict2[key])
+         else:
+             dicts_are_equal = dicts_are_equal and (dict1[key] == dict2[key])
+
+     return dicts_are_equal
+
 def updateOne(docid,req_list):
     global statsCouch
     match_req_list=filter (lambda r: r["request_name"]==docid, req_list)
@@ -174,7 +196,12 @@ def updateOne(docid,req_list):
             for g in to_get:
                 if not g in updatedDoc: continue
                 rev[g] = copy.deepcopy(updatedDoc[g])
-            updatedDoc['pdmv_monitor_history'].insert(0, rev)
+            old_history = copy.deepcopy(updatedDoc['pdmv_monitor_history'][0])
+            new_history = copy.deepcopy(rev)
+            del old_history["pdmv_monitor_time"] ##compare history without monitor time
+            del new_history["pdmv_monitor_time"]
+            if not compare_dictionaries(old_history, new_history): # it is worth to fill history
+                updatedDoc['pdmv_monitor_history'].insert(0, rev)
 
         
         try:
