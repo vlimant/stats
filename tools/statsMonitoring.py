@@ -125,7 +125,7 @@ def eval_wma_string(string):
 
 #-------------------------------------------------------------------------------
 
-def generic_get(url,do_eval=True):
+def generic_get(url, do_eval=True):
     opener=urllib2.build_opener(X509CertOpen())  
     datareq = urllib2.Request(url)
     datareq.add_header('authenticated_wget', "The ultimate wgetter")  
@@ -438,7 +438,7 @@ def get_expected_events_withinput(
                 #q = './das_client.py --query="file dataset=%s run=%s | sum(file.nevents)" --format=json --das-headers --limit=0' %(d,run)
                 #result = commands.getoutput(q)
                 ret = generic_get(dbs3_url+"filesummaries?dataset=%s&run_num=%s" %(d, run)) #returns blocks names
-                data = result
+                data = ret
                 try:
                   #s+=eval(os.popen(q).read())
                   #s += int(data["data"]["result"]["value"])
