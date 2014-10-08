@@ -209,37 +209,37 @@ def get_dataset_name(reqname):
   apossibleChoice=''
 
   def compareDS(s1, s2):
-    t1=s1.split('/')[1:]
-    t2=s2.split('/')[1:]
-    if len(t1[1]) > len(t2[1]):
-      #print t1,t2,True
-      return 1
-    else:
-      #decision=t1[2] < t2[2]
-      def tierP(t):
-        tierPriority=[
-                      '/RECO', 
-                      'SIM-RECO',
-                      'DIGI-RECO',
-                      'AOD',
-                      'SIM-RAW-RECO',
-                      'DQM' ,
-                      'GEN-SIM',
-                      'RAW-RECO',
-                      'USER',
-                      'ALCARECO']
-        
-        for (p,tier) in enumerate(tierPriority):
-          if tier in t:
-            #print t,p
-            return p
-        #print t
-        return t
-      p1=tierP(t1[2])
-      p2=tierP(t2[2])
-      decision=(p1> p2)
-      #print t1,t2,decision
-      return decision*2 -1
+    tier1 = "/"+s1.split('/')[-1]
+    tier2 = "/"+s2.split('/')[-1]
+
+    def tierP(t):
+      ## the further down, the less importance
+      tierPriority=[
+        '/ALCARECO',
+        '/USER',
+        '/RAW-RECO',
+        'AOD',
+        'DQM' ,
+        'SIM-RAW-RECO',
+        'DIGI-RECO',
+        'SIM-RECO',
+        '/GEN-SIM',
+        '/GEN',
+        '/RECO', 
+        ]
+      
+      for (p,tier) in enumerate(tierPriority):
+        if tier in t:
+          #print t,p
+          return p
+      #print t,"no match"
+      return t
+
+    p1=tierP(tier1)
+    p2=tierP(tier2)
+    decision=(p1>p2)
+    #print t1,t2,decision
+    return decision*2 -1
                                                                                                                                                   
   dataset_list.sort(cmp=compareDS)
   if len(dataset_list)==0:
