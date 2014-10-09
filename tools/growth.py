@@ -123,6 +123,7 @@ def plotGrowth(thisDoc,i,force=False,wait=False):
     if grn!=0:
         
         ##only plot those with something in
+        expecteds=[]
         if graphs_by_ds:
             mg = ROOT.TMultiGraph()
             if thisDoc['pdmv_prep_id'].strip() not in ['','No-Prepid-Found']:
@@ -136,6 +137,16 @@ def plotGrowth(thisDoc,i,force=False,wait=False):
             mg.Draw("a")
             mg.GetXaxis().SetTitle('Weeks before today'+time.ctime(today))
             mg.GetYaxis().SetTitle('M events')
+            
+            for (ds,g) in graphs_by_ds.items():
+                if 'pdmv_expected_events_per_ds' in thisDoc and ds in thisDoc['pdmv_expected_events_per_ds']:
+                    expecteds.append( TLine(mg.GetXaxis().GetXmin(), thisDoc['pdmv_expected_events_per_ds'][ds]/Nunit,
+                                            mg.GetXaxis().GetXmax(), thisDoc['pdmv_expected_events_per_ds'][ds]/Nunit)
+                                      )
+                    expecteds[-1].SetLineStyle(g.GetLineColor() ) ## tie the style to the color
+                    expecteds[-1].SetLineWidth(4)
+                    expecteds[-1].SetLineColor( g.GetLineColor() )
+                    expecteds[-1].Draw()
             
         else:
             gr.Draw('apl')
