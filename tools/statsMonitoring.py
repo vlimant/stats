@@ -307,6 +307,93 @@ def configsFromWorkload( workload ):
 
   return res
 
+
+def get_expected_events_by_output( request_name ):
+  
+  def get_item( i, d ):
+    if type(d)!=dict: 
+      return None
+    if not d:
+      return None
+    if i in d: 
+      return d[i]
+    else:
+      for (k,v) in d.items():
+        r=get_item(i, v)
+        if r: return r
+
+  def unique( l ):
+    rl = []
+    for i in l:
+      if not i in rl:
+        rp.append(i)
+    return rl
+  
+  def get_strings( d ):
+    ## retrieve all leaves that are strings
+    if type(d)!=dict or not d:
+      return None
+    ret=[]
+    for (k,v) in d.items():
+      if type(v) == str:
+        ret.append(v)
+      else:
+        r=get_strings(v)
+        if r:
+          ret.extend(r)
+    return ret
+
+  dict_from_workload_local = getDictFromWorkload( request_name, attributes=['schema','dataTier',['subscriptions','dataset']])
+  if not dict_from_workload_local:
+    return {}
+
+  schema = dict_from_workload_local['request']['schema']
+  
+  task_i=1
+  task_map = {}
+  while task_i:
+    k='Task%d'%(task_i)
+    task_i+=1
+    if k in schema:
+      task =schema[k]
+      task_map[ task['TaskName']] = k
+    else:
+      break
+    
+  expectedEvents='ExpectedNumEvents'
+  expectedOuputs='ExpectedOutputs'
+  while not all(map( lambda d : expectedEvents in d.keys() and expectedOuputs in d.keys(), [ schema[t] for t in task_map.values()])):
+    for (taskname,taski) in task_map.items():
+      task = schema[taski]
+      if not expectedEvents in task:
+        if 'RequestNumEvents' in task:
+          #print "from expected",taskname
+          task[expectedEvents] = task['RequestNumEvents']
+          if 'FilterEfficiency' in task:
+            task[expectedEvents] *= task['FilterEfficiency']
+        else:
+          previous=task_map[ task['InputTask'] ]
+          if expectedEvents in schema[ previous ]:
+            #print "from previous",taskname, previous
+            task[expectedEvents] = schema[ task_map[ task['InputTask'] ] ][expectedEvents]
+            if 'FilterEfficiency' in task:
+              task[expectedEvents] *= task['FilterEfficiency']
+      if not expectedOuputs in task:
+        what=get_item( taskname, dict_from_workload_local['tasks'] )
+        #pprint.pprint( what)
+        task[expectedOuputs] = get_strings( what['subscriptions'] )
+        task['plenty'] = unique(filter(lambda s : '/' in s, get_strings( what['tree'] )))
+
+  pprint.pprint( schema )
+  
+  expected_per_dataset={}
+  for (taskname,taski) in task_map.items():           
+    task = schema[taski]          
+    for d in task[expectedOuputs]:
+      expected_per_dataset[d] = task[expectedEvents]
+      
+  return expected_per_dataset
+
 def get_expected_events(request_name):
     workload_info=generic_get(request_detail_address+request_name, False)
     #import os
@@ -846,15 +933,15 @@ def calc_eta(level,running_days):
 
 #------------------------------------------------------------------------------- 
 
-def getDictFromWorkload(req_name):
+def getDictFromWorkload(req_name, attributes=['request','constraints']):
 
   dict_from_workload={}
   from TransformRequestIntoDict import TransformRequestIntoDict
-  dict_from_workload=TransformRequestIntoDict( req_name, ['request','constraints'], True )
+  dict_from_workload=TransformRequestIntoDict( req_name, attributes, True )
   dontloopforever=0
   while dict_from_workload==None:
     print "The request",req_name,"does not have a workLoad ... which is a glitch"
-    dict_from_workload=TransformRequestIntoDict( req_name, ['request','constraints'], True )
+    dict_from_workload=TransformRequestIntoDict( req_name, attributes, True )
     dontloopforever+=1
     if dontloopforever>10:
       print "\t\tI am lost trying to get the dict workLoad for\n\t\t",req_name
@@ -1150,48 +1237,6 @@ def parallel_test(arguments,force=False):
     req_extras={}
 
 
-    """
-    try:
-    req_extras=get_req_extras(req)
-    priority=req_extras["RequestPriority"]         
-    prep_id=req_extras["PrepID"]         
-    campaign=req_extras["Campaign"]
-    except:
-    pass
-    
-    if prep_id!="":
-    pdmv_request_dict["pdmv_prep_id"]=prep_id
-    if campaign!="":
-    pdmv_request_dict["pdmv_campaign"]=campaign        
-
-    
-    # get PrimaryDataset_pattern
-    pd_pattern=""
-    if req_extras.has_key("PrimaryDataset"):
-    pd_pattern=req_extras["PrimaryDataset"]
-    pdmv_request_dict["pdmv_pd_pattern"]=pd_pattern
-    """
-
-    """
-    if (not 'pdmv_expected_events' in pdmv_request_dict) or ('pdmv_expected_events' in pdmv_request_dict and pdmv_request_dict["pdmv_expected_events"]<0) or (skewed and pdmv_request_dict['pdmv_status_in_DAS']):
-      if not dict_from_workload: dict_from_workload=getDictFromWorkload(req_name)
-      if not dict_from_workload: return {}
-      
-      raw_expected_evts=get_expected_events_withdict( dict_from_workload )
-      if DEBUGME: print "--------"      
-      #if DEBUGME: print "Expected are %s"%raw_expected_evts
-    
-      # get the expected number of evts    
-      expected_evts=-1
-      if raw_expected_evts==None or raw_expected_evts=='None':
-        expected_evts=-1
-      else:
-        expected_evts=int(raw_expected_evts)
-      if DEBUGME: print "---------"      
-      pdmv_request_dict["pdmv_expected_events"]=expected_evts
-      #print pdmv_request_dict["pdmv_expected_events"]
-    """
-    
     # Priority
     ###JR out pdmv_request_dict["pdmv_priority"]=priority
     retrievePriority=False
@@ -1308,6 +1353,9 @@ def parallel_test(arguments,force=False):
     if not 'pdmv_expected_events' in pdmv_request_dict:
       pdmv_request_dict['pdmv_expected_events']=-1
 
+    if not 'pdmv_expected_events_per_ds' in pdmv_request_dict:
+      pdmv_request_dict['pdmv_expected_events_per_ds'] = {}
+
     ## why having "expected events" not calculated if the output dataset has no status yet ?
     #to prevent stupid update from garbage requests announced or skewed but enrecoverable
     ##if ((pdmv_request_dict["pdmv_expected_events"]<0) or skewed) and pdmv_request_dict['pdmv_status_in_DAS']:
@@ -1332,6 +1380,11 @@ def parallel_test(arguments,force=False):
         expected_evts=int(raw_expected_evts)
       if DEBUGME: print "---------"      
       pdmv_request_dict["pdmv_expected_events"]=expected_evts
+      ## get an expected per output dataset if possible
+      if pdmv_request_dict['pdmv_type'] == 'TaskChain':
+        ## support only this for now
+        pdmv_request_dict['pdmv_expected_events_per_ds'] = get_expected_events_by_output( req_name )
+
       #print pdmv_request_dict["pdmv_expected_events"]
 
       
