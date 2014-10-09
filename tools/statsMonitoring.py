@@ -307,8 +307,14 @@ def configsFromWorkload( workload ):
 
   return res
 
-
 def get_expected_events_by_output( request_name ):
+  try:
+    return get_expected_events_by_output_( request_name )
+  except:
+    print "something went wrong in estimating the expected by output. no breaking the update though"
+    return {}
+
+def get_expected_events_by_output_( request_name ):
   
   def get_item( i, d ):
     if type(d)!=dict: 
@@ -348,7 +354,10 @@ def get_expected_events_by_output( request_name ):
     return {}
 
   schema = dict_from_workload_local['request']['schema']
-  
+    
+  if schema['RequestType'] != 'TaskChain':
+    return {}
+
   task_i=1
   task_map = {}
   while task_i:
@@ -1381,9 +1390,7 @@ def parallel_test(arguments,force=False):
       if DEBUGME: print "---------"      
       pdmv_request_dict["pdmv_expected_events"]=expected_evts
       ## get an expected per output dataset if possible
-      if pdmv_request_dict['pdmv_type'] == 'TaskChain':
-        ## support only this for now
-        pdmv_request_dict['pdmv_expected_events_per_ds'] = get_expected_events_by_output( req_name )
+      pdmv_request_dict['pdmv_expected_events_per_ds'] = get_expected_events_by_output( req_name )
 
       #print pdmv_request_dict["pdmv_expected_events"]
 
