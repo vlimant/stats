@@ -140,8 +140,8 @@ def plotGrowth(thisDoc,i,force=False,wait=False):
             
             for (ds,g) in graphs_by_ds.items():
                 if 'pdmv_expected_events_per_ds' in thisDoc and ds in thisDoc['pdmv_expected_events_per_ds']:
-                    expecteds.append( TLine(mg.GetXaxis().GetXmin(), thisDoc['pdmv_expected_events_per_ds'][ds]/Nunit,
-                                            mg.GetXaxis().GetXmax(), thisDoc['pdmv_expected_events_per_ds'][ds]/Nunit)
+                    expecteds.append( ROOT.TLine(mg.GetXaxis().GetXmin(), thisDoc['pdmv_expected_events_per_ds'][ds]/Nunit,
+                                                 mg.GetXaxis().GetXmax(), thisDoc['pdmv_expected_events_per_ds'][ds]/Nunit)
                                       )
                     expecteds[-1].SetLineStyle(g.GetLineColor() ) ## tie the style to the color
                     expecteds[-1].SetLineWidth(4)
@@ -157,12 +157,12 @@ def plotGrowth(thisDoc,i,force=False,wait=False):
             gr.GetYaxis().SetRangeUser(0,maxYaxis*1.05)
             gr.GetXaxis().SetRangeUser(gr.GetXaxis().GetXmin(),0.1)
         
-            
-        expected=ROOT.TLine(gr.GetXaxis().GetXmin(),Nexpected,
-                            gr.GetXaxis().GetXmax(),Nexpected)
-        expected.SetLineWidth(4)
-        expected.SetLineColor(2)
-        expected.Draw()
+        if not expecteds:
+            expected=ROOT.TLine(gr.GetXaxis().GetXmin(),Nexpected,
+                                gr.GetXaxis().GetXmax(),Nexpected)
+            expected.SetLineWidth(4)
+            expected.SetLineColor(2)
+            expected.Draw()
     
 
         dir,file = one.rsplit('_', 1)
