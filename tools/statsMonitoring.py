@@ -312,6 +312,8 @@ def get_expected_events_by_output( request_name ):
     return get_expected_events_by_output_( request_name )
   except:
     print "something went wrong in estimating the expected by output. no breaking the update though"
+    import traceback
+    print traceback.format_exc()
     return {}
 
 def get_expected_events_by_output_( request_name ):
@@ -380,6 +382,19 @@ def get_expected_events_by_output_( request_name ):
           task[expectedEvents] = task['RequestNumEvents']
           if 'FilterEfficiency' in task:
             task[expectedEvents] *= task['FilterEfficiency']
+        elif 'InputDataset' in task:
+          rne=None
+          ids = [task['InputDataset']]
+          bwl = []
+          rwl = []
+          f= 1.
+          if 'BlockWhitelist' in task:
+            bwl = task['BlockWhitelist']
+          if 'RunWhitelist' in task:
+            rwl = task['RunWhitelist']
+          if 'FilterEfficiency' in task:
+            f = task['FilterEfficiency']
+          task[expectedEvents] = get_expected_events_withinput(rne,ids,bwl,rwl,f)
         else:
           previous=task_map[ task['InputTask'] ]
           if expectedEvents in schema[ previous ]:
