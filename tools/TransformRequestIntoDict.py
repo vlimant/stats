@@ -60,22 +60,33 @@ def TransformRequestIntoDict( request, allowed=None, onlyRequest=False, inObject
             continue
                     
         #print fields,value
-        fieldsL=fields.split('.')
+        fieldsL=map(lambda s : s.strip(), fields.split('.'))
         #skip 0 because it's the request name ?
         (fields,leaf)=(fieldsL[0:-1],fieldsL[-1].rstrip())
+        if 'pickl' in leaf: continue
         if allowed:
             go=False
+            #print fields[1]
+            #if any( map(lambda f : f in allowed, fieldsL)):
+            #    go=True
             for allow in allowed:
-                if allow in fieldsL:
-                    go=True
-                    break
+                if type(allow)==str:
+                    if allow in fieldsL:
+                        go=True
+                        break
+                elif type(allow)==list:
+                    if all(map(lambda a: a in fieldsL, allow)):
+                        go=True
+                        break
+                        
             if not go:
                 continue
+
         for field in fields:
             if not field in towhich:
                 towhich[field]={}
             towhich = towhich[field]
-            #print field
+            #print "adding.",field
         # assign value
         try:
             towhich[leaf]= eval(value.lstrip())
@@ -84,8 +95,10 @@ def TransformRequestIntoDict( request, allowed=None, onlyRequest=False, inObject
             try:
                 towhich[leaf]= eval(value.lstrip().lstrip("'").rstrip("'"))
             except:
+                print "cannot convert"
                 print leaf
-                print value.lstrip()
+                #print value.lstrip()
+                print value
                 raise Exception(traceback.format_exc())
 
     if final=={}:
