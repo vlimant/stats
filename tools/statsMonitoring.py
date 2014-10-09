@@ -326,7 +326,7 @@ def get_expected_events_by_output( request_name ):
     rl = []
     for i in l:
       if not i in rl:
-        rp.append(i)
+        rl.append(i)
     return rl
   
   def get_strings( d ):
@@ -384,7 +384,7 @@ def get_expected_events_by_output( request_name ):
         task[expectedOuputs] = get_strings( what['subscriptions'] )
         task['plenty'] = unique(filter(lambda s : '/' in s, get_strings( what['tree'] )))
 
-  pprint.pprint( schema )
+  ##pprint( schema )
   
   expected_per_dataset={}
   for (taskname,taski) in task_map.items():           
