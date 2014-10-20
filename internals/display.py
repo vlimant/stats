@@ -208,7 +208,7 @@ class HomePage(object):
         if(Ty != ""):
             ListSearch.append(Ty)
             ListOfS.append(2)
-            __query.add_param("Ty", EE)
+            __query.add_param("Ty", Ty)
         if(SR != ""):
             ListSearch.append(SR)
             ListOfS.append(3)
