@@ -56,7 +56,7 @@ def plotGrowth(thisDoc,i,force=False,wait=False):
                         graphs_by_ds[ds] = ROOT.TGraph()
                         graphs_by_ds[ds].SetName(ds.replace('/',''))
                         graphs_by_ds[ds].SetLineWidth(4)
-                        graphs_by_ds[ds].SetLineColor(3+len(graphs_by_ds.keys()))
+                        graphs_by_ds[ds].SetLineColor(5+len(graphs_by_ds.keys()))
                         graphs_by_ds[ds].SetMarkerStyle(5)
 
                     oN = nextOne['pdmv_dataset_statuses'][ds]['pdmv_evts_in_DAS']
@@ -70,7 +70,6 @@ def plotGrowth(thisDoc,i,force=False,wait=False):
             N=nextOne['pdmv_evts_in_DAS'] + nextOne['pdmv_open_evts_in_DAS']
             #do not put too many zero points
             #if N<1: continue
-
 
             N/=Nunit
             gr.SetPoint(grn,up,N)
@@ -137,17 +136,25 @@ def plotGrowth(thisDoc,i,force=False,wait=False):
             mg.Draw("a")
             mg.GetXaxis().SetTitle('Weeks before today'+time.ctime(today))
             mg.GetYaxis().SetTitle('M events')
-            
+            maxYaxis = mg.GetYaxis().GetXmax()
+            #print "max is",maxYaxis
             for (ds,g) in graphs_by_ds.items():
                 if 'pdmv_expected_events_per_ds' in thisDoc and ds in thisDoc['pdmv_expected_events_per_ds']:
-                    expecteds.append( ROOT.TLine(mg.GetXaxis().GetXmin(), thisDoc['pdmv_expected_events_per_ds'][ds]/Nunit,
-                                                 mg.GetXaxis().GetXmax(), thisDoc['pdmv_expected_events_per_ds'][ds]/Nunit)
+                    thisMax = thisDoc['pdmv_expected_events_per_ds'][ds]/Nunit
+                    expecteds.append( ROOT.TLine(mg.GetXaxis().GetXmin(), thisMax,
+                                                 mg.GetXaxis().GetXmax(), thisMax)
                                       )
                     expecteds[-1].SetLineStyle(g.GetLineColor() ) ## tie the style to the color
                     expecteds[-1].SetLineWidth(4)
                     expecteds[-1].SetLineColor( g.GetLineColor() )
                     expecteds[-1].Draw()
-            
+                    
+                    if thisMax*1.05 > maxYaxis:
+                        #print "increasing to", maxYaxis
+                        maxYaxis = thisMax*1.05
+            if not expecteds:
+                maxYaxis = Nexpected * 1.05
+            mg.GetYaxis().SetRangeUser(0, maxYaxis)
         else:
             gr.Draw('apl')
             grc.Draw('samepl')
