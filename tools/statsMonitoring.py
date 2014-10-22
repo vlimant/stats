@@ -1056,6 +1056,11 @@ def parallel_test(arguments,force=False):
     dict_from_workload={}
 
     if req_status in skippable_stati:
+
+      if len(matching_reqs):
+        ## it was there already. do nothing more
+        return pdmv_request_dict
+        
       ## return a very minimalistic content
       if not dict_from_workload: dict_from_workload=getDictFromWorkload(req_name)
       if not dict_from_workload: return {}
@@ -1069,7 +1074,6 @@ def parallel_test(arguments,force=False):
       pdmv_request_dict["pdmv_submission_date"]=datelist_to_str(dict_from_workload['request']['schema']['RequestDate'])
       pdmv_request_dict["pdmv_submission_time"]=timelist_to_str(dict_from_workload['request']['schema']['RequestDate'])
       print "Putting minimalistic information for failed requests"
-
       return pdmv_request_dict
       #return {} ## return None so that you can remove the empty dict, without removing all failures, if ever
     
@@ -1083,10 +1087,7 @@ def parallel_test(arguments,force=False):
     if DEBUGME: print "--"
     #transform the workload in a dictionnary for convenience , can also be made an object
 
-
-
     # check if in the old and in complete_stati, just copy and go on
-    matching_reqs=filter(lambda oldreq: oldreq['pdmv_request_name']==req_name ,old_useful_info)
     skewed=False
     deadWood=False
     if len(matching_reqs)==1:
