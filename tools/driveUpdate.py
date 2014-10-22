@@ -171,11 +171,17 @@ def updateOne(docid,req_list):
         pprint.pprint(thisDoc)
         statsCouch.delete_file_info(docid,thisDoc['_rev'])
         return False
+
+    ## minimalistic output
+    #if not 'pdmv_evts_in_DAS' in updatedDoc:
+    #    print "This is a minimalistic doc"
+    #    return False
+
     #if pprint.pformat(updatedDoc)!=pprint.pformat(thisDoc):
     if worthTheUpdate(updatedDoc,thisDoc):
         to_get=['pdmv_monitor_time','pdmv_evts_in_DAS','pdmv_open_evts_in_DAS','pdmv_dataset_statuses']
         if 'pdvm_monitor_history' in updatedDoc:
-            updatedDoc['pdvm_monitor_history'] == updatedDoc.pop( 'pdvm_monitor_history' )
+            updatedDoc['pdmv_monitor_history'] = updatedDoc.pop( 'pdvm_monitor_history' )
         if not 'pdmv_monitor_history' in updatedDoc:
             ## do the migration
             thisDoc_bis = statsCouch.get_file_info_withrev(docid)
