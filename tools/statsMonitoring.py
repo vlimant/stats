@@ -40,6 +40,7 @@ import multiprocessing
 import itertools
 import random
 import json
+import copy
 
 from phedex import phedex,runningSites,custodials,atT2,atT3
 
@@ -972,6 +973,41 @@ def getDictFromWorkload(req_name, attributes=['request','constraints']):
       break
   return dict_from_workload
 
+pdmv_doc_schema = {
+   "pdmv_expected_events": 0,
+   "pdmv_configs": [   ],
+   "pdmv_priority": 0,
+   "pdmv_running_jobs": 0,
+   "pdmv_running_days": 0,
+   "pdmv_evts_in_DAS": 0,
+   "pdmv_completion_eta_in_DAS": 0,
+   "pdmv_all_jobs": 0,
+   "pdmv_status": "",
+   "pdmv_status_from_reqmngr": "",
+   "pdmv_prep_id": "",
+   "pdmv_dataset_name": "",
+   "pdmv_custodial_sites": [   ],
+   "pdmv_dataset_list": [   ],
+   "pdmv_completion_in_DAS": 0,
+   "pdmv_request_name": "",
+   "pdmv_type": "",
+   "pdmv_at_T2": [   ],
+   "pdmv_at_T3": [   ],
+   "pdmv_dataset_statuses": {  },
+   "pdmv_running_sites": [   ],
+   "pdmv_submission_date": "",
+   "pdmv_campaign": "",
+   "pdmv_request": {   },
+   "pdmv_present_priority": 0,
+   "pdmv_pending_jobs": 0,
+   "pdmv_input_dataset": "",
+   "pdmv_monitor_history": [],
+   "pdmv_performance": {},
+   "pdmv_status_in_DAS": "",
+   "pdmv_monitor_time": "",
+   "pdmv_submission_time": "",
+   "pdmv_open_evts_in_DAS": 0
+   }
 
 numberofrequestnameprocessed=0
 countOld=0
@@ -984,9 +1020,6 @@ def parallel_test(arguments,force=False):
     global numberofrequestnameprocessed
     #print  "doing ",req["request_name"],numberofrequestnameprocessed
     numberofrequestnameprocessed+=1
-    
-    pdmv_request_dict={}    
-    
 
     if DEBUGME: print "-"
     ##faking announced status
@@ -1005,13 +1038,41 @@ def parallel_test(arguments,force=False):
       return {}
     req_status=req["status"]
 
-    if req_status in skippable_stati:
-      return None
-      #return {} ## return None so that you can remove the empty dict, without removing all failures, if ever
-
     # the name
     req_name=req["request_name"]
+
+    matching_reqs=filter(lambda oldreq: oldreq['pdmv_request_name']==req_name ,old_useful_info)
+    if len(matching_reqs):    
+      pdmv_request_dict = matching_reqs[0]
+    else:
+      pdmv_request_dict=copy.deepcopy( pdmv_doc_schema )
+
     pdmv_request_dict["pdmv_request_name"]=req_name
+    # the request itself!
+    pdmv_request_dict["pdmv_request"]=req        
+    
+    pdmv_request_dict["pdmv_status_from_reqmngr"]=req_status
+    
+    dict_from_workload={}
+
+    if req_status in skippable_stati:
+      ## return a very minimalistic content
+      if not dict_from_workload: dict_from_workload=getDictFromWorkload(req_name)
+      if not dict_from_workload: return {}
+      
+      if 'PrepID' in dict_from_workload['request']['schema']:
+        prep_id = dict_from_workload['request']['schema']['PrepID']
+      else:
+        prep_id='No-Prepid-Found'
+      pdmv_request_dict["pdmv_prep_id"]=prep_id
+
+      pdmv_request_dict["pdmv_submission_date"]=datelist_to_str(dict_from_workload['request']['schema']['RequestDate'])
+      pdmv_request_dict["pdmv_submission_time"]=timelist_to_str(dict_from_workload['request']['schema']['RequestDate'])
+      print "Putting minimalistic information for failed requests"
+
+      return pdmv_request_dict
+      #return {} ## return None so that you can remove the empty dict, without removing all failures, if ever
+    
 
     phedexObj=None
     phedexObjInput=None
@@ -1021,7 +1082,7 @@ def parallel_test(arguments,force=False):
 
     if DEBUGME: print "--"
     #transform the workload in a dictionnary for convenience , can also be made an object
-    dict_from_workload={}
+
 
 
     # check if in the old and in complete_stati, just copy and go on
@@ -1210,13 +1271,6 @@ def parallel_test(arguments,force=False):
 
     if DEBUGME: print "-----"      
     ##put an update time in the json
-    
-    # the request itself!
-    pdmv_request_dict["pdmv_request"]=req        
-    
-    # check the status
-    req_status=req["status"]
-    pdmv_request_dict["pdmv_status_from_reqmngr"]=req_status
     
     if req_status in priority_changable_stati:
       pdmv_request_dict["pdmv_status"]="ch_prio"

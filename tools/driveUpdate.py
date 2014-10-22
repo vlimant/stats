@@ -55,12 +55,27 @@ def worthTheUpdate(new,old):
     if FORCE: 
         return True
 
-    if old['pdmv_evts_in_DAS']!=new['pdmv_evts_in_DAS']:
+    could_be_different = ['pdmv_evts_in_DAS','pdmv_status_in_DAS','pdmv_status_from_reqmngr']
+    for item in could_be_different:
+        if old[item] != new[item]:
+            print item,"is different"
+            return True
+
+    if not 'pdmv_dataset_statuses' in new:
+        print "not statuses"
         return True
-    if old['pdmv_status_in_DAS']!=new['pdmv_status_in_DAS']:
-        return True
-    if old['pdmv_status_from_reqmngr']!=new['pdmv_status_from_reqmngr']:
-        return True
+
+    stats_threshold = 0.04
+    if 'pdmv_dataset_statuses' in old:
+        for ds in new['pdmv_dataset_statuses']:
+            if ds in old['pdmv_dataset_statuses']:
+                old_s = old['pdmv_dataset_statuses'][ds]['pdmv_evts_in_DAS']
+                new_s = new['pdmv_dataset_statuses'][ds]['pdmv_evts_in_DAS']
+                if new_s:
+                    fract_new = (new_s-old_s)/float(new_s)
+                    if fract_new > stats_threshold:
+                        print ds,"has more events",fract_new,new_s,old_s
+                        return True
 
     if set(old['pdmv_at_T2'])!=set(new['pdmv_at_T2']):
         return True
@@ -93,7 +108,7 @@ def worthTheUpdate(new,old):
         if n_tot:
             f_more=n_more / n_tot
         #more than x% more stat
-        if f_more > 0.04:
+        if f_more > stats_threshold:
             return True
         #change of status
         if old['pdmv_status_from_reqmngr']!=new['pdmv_status_from_reqmngr']:
@@ -204,14 +219,16 @@ def updateOne(docid,req_list):
             for g in to_get:
                 if not g in updatedDoc: continue
                 rev[g] = copy.deepcopy(updatedDoc[g])
-            old_history = copy.deepcopy(updatedDoc['pdmv_monitor_history'][0])
-            new_history = copy.deepcopy(rev)
-            del old_history["pdmv_monitor_time"] ##compare history without monitor time
-            del new_history["pdmv_monitor_time"]
-            if not compare_dictionaries(old_history, new_history): # it is worth to fill history
+            if len(updatedDoc['pdmv_monitor_history']):
+                old_history = copy.deepcopy(updatedDoc['pdmv_monitor_history'][0])
+                new_history = copy.deepcopy(rev)
+                del old_history["pdmv_monitor_time"] ##compare history without monitor time
+                del new_history["pdmv_monitor_time"]
+                if not compare_dictionaries(old_history, new_history): # it is worth to fill history
+                    updatedDoc['pdmv_monitor_history'].insert(0, rev)
+            else:
                 updatedDoc['pdmv_monitor_history'].insert(0, rev)
 
-        
         try:
             statsCouch.update_file(docid,json.dumps(updatedDoc))
             #pprint.pprint(updatedDoc)
@@ -359,7 +376,7 @@ def main_do( options ):
             
         #skip trying to insert aborted and rejected or failed
         #req_list = filter( lambda req : not req["status"] in ['aborted','rejected','failed','aborted-archived','rejected-archived','failed-archived'], req_list )
-        req_list = filter( lambda req : not req["status"] in ['aborted','rejected','failed'], req_list )
+        #req_list = filter( lambda req : not req["status"] in ['aborted','rejected','failed'], req_list )
         #print len(req_list)
             
         #do not update TaskChain request statuses
