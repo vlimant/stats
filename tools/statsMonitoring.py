@@ -1322,9 +1322,8 @@ def parallel_test(arguments,force=False):
       pass
     
     pdmv_request_dict["pdmv_dataset_name"]=dataset_name
-    if len(dataset_list):
-      pdmv_request_dict["pdmv_dataset_list"]=dataset_list
-    
+    pdmv_request_dict["pdmv_dataset_list"]=dataset_list
+
     deltaUpdate = 0
     ##remove an old field
     if 'pdmv_update_time' in pdmv_request_dict:
