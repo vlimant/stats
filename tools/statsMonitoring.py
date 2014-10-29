@@ -1037,6 +1037,7 @@ def parallel_test(arguments,force=False):
       if 'pdmv_expected_events' in pdmv_request_dict and pdmv_request_dict['pdmv_expected_events']==-1:        skewed=True
       if pdmv_request_dict['pdmv_status_in_DAS']=='?': skewed=True
       if pdmv_request_dict['pdmv_dataset_name']=='?' : skewed=True
+      if pdmv_request_dict['pdmv_dataset_name']=='None Yet' and req["status"] in priority_changable_stati:      skewed=True
       if pdmv_request_dict['pdmv_evts_in_DAS']<0 : skewed=True
       if pdmv_request_dict['pdmv_evts_in_DAS']==0 and req["status"] in ['announced']: skewed=True
       if pdmv_request_dict['pdmv_status_in_DAS'] in [None,'PRODUCTION'] and req["status"] in ['announced','normal-archived']: skewed=True
@@ -1155,9 +1156,10 @@ def parallel_test(arguments,force=False):
       #if (pdmv_request_dict['pdmv_status_from_reqmngr'] in complete_stati) and pdmv_request_dict['pdmv_completion_eta_in_DAS']<90:
       #  skewed=True
 
-      if not 'pdmv_dataset_list' in pdmv_request_dict or pdmv_request_dict['pdmv_dataset_list']==[] or force:
-        dataset,dataset_list=get_dataset_name(req_name)
-        pdmv_request_dict['pdmv_dataset_list']=dataset_list
+      # this is treated later on. was there only for transitionning
+      ##if not 'pdmv_dataset_list' in pdmv_request_dict or pdmv_request_dict['pdmv_dataset_list']==[] or force:
+      ##  dataset,dataset_list=get_dataset_name(req_name)
+      ##  pdmv_request_dict['pdmv_dataset_list']=dataset_list
         
       if (pdmv_request_dict['pdmv_status_from_reqmngr'] in complete_stati) and not skewed and not force:
         print "** %s is there already"%req_name
@@ -1297,12 +1299,12 @@ def parallel_test(arguments,force=False):
     if 'pdmv_dataset_name' in pdmv_request_dict and (pdmv_request_dict["pdmv_dataset_name"] in ['?','None Yet'] or 'None-' in pdmv_request_dict["pdmv_dataset_name"] or '24Aug2012' in pdmv_request_dict["pdmv_dataset_name"]):
       makedsnquery=True
 
-    if req_status in priority_changable_stati:
-      makedsnquery=False
-      
     if force:
       makedsnquery=True
-      
+
+    if req_status in priority_changable_stati:
+      makedsnquery=False
+            
     #print makedsnquery
     try:
       if makedsnquery:
