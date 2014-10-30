@@ -458,10 +458,6 @@ def get_expected_events_withdict(dict_from_workload):
     f=float(dict_from_workload['request']['schema']['FilterEfficiency'])
   elif 'Task1' in dict_from_workload['request']['schema'] and 'FilterEfficiency' in dict_from_workload['request']['schema']['Task1']:
     f=float(dict_from_workload['request']['schema']['Task1']['FilterEfficiency'])
-    ## temporary work-around for request manager not creating enough jobs
-    ## https://github.com/dmwm/WMCore/issues/5336 => request manager
-    ## https://github.com/cms-PdmV/cmsPdmV/pull/655 => McM
-    if rne: rne *= f
   else:
     f=1.
     
