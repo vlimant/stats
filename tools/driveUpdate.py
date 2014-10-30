@@ -128,14 +128,16 @@ def compare_dictionaries(dict1, dict2):
          return False
 
 
-     dicts_are_equal = True
-     for key in dict1.keys():
-         if type(dict1[key]) is dict:
-             dicts_are_equal = dicts_are_equal and compare_dictionaries(dict1[key],dict2[key])
-         else:
-             dicts_are_equal = dicts_are_equal and (dict1[key] == dict2[key])
-
-     return dicts_are_equal
+     try:
+         dicts_are_equal = True
+         for key in dict1.keys():
+             if type(dict1[key]) is dict:
+                 dicts_are_equal = dicts_are_equal and compare_dictionaries(dict1[key],dict2[key])
+             else:
+                 dicts_are_equal = dicts_are_equal and (dict1[key] == dict2[key])
+         return dicts_are_equal
+     except:
+         return False
 
 def updateOne(docid,req_list):
     global statsCouch
@@ -221,7 +223,7 @@ def updateOne(docid,req_list):
         return False
 
 def updateOneIt(arguments):
-    #print len(arguments)
+    print "###DEBUG###", arguments[0]
     #return 
     docid,req_list = arguments
     return updateOne(docid,req_list)
@@ -442,7 +444,9 @@ def main_do( options ):
         repeated_req_list = itertools.repeat( req_list , len(docs) )
         print "Dispaching",len(docs),"requests to ",str(nproc),"processes..."
         pool = multiprocessing.Pool(nproc)
+        print "##DEBUG###\n %s \n\n%s\n###DEBUG###"%(docs, repeated_req_list)
         results=pool.map( updateOneIt, itertools.izip( docs, repeated_req_list ) )
+
         print "End dispatching!"
 
         if options.search:
