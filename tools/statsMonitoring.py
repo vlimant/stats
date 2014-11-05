@@ -1426,26 +1426,29 @@ def parallel_test(arguments,force=False):
         phedexObj=phedex(pdmv_request_dict["pdmv_dataset_name"])
       pdmv_request_dict['pdmv_running_sites']=runningSites(phedexObj)
 
-    if (not 'pdmv_custodial_sites' in pdmv_request_dict or pdmv_request_dict['pdmv_custodial_sites']==[]):
+    if not 'pdmv_assigned_sites' in pdmv_request_dict:
+      pdmv_request_dict['pdmv_assigned_sites']=[]
+
+    if not 'pdmv_custodial_sites' in pdmv_request_dict:
       pdmv_request_dict['pdmv_custodial_sites']=[]
+
+    if pdmv_request_dict['pdmv_assigned_sites']==[] or pdmv_request_dict['pdmv_custodial_sites']==[]:
+      if not dict_from_workload: dict_from_workload=getDictFromWorkload(req_name)
+      if not dict_from_workload:          return {}
+      #find out the keys that has constraints
+      sites=set()
+      for tn in [k for k in dict_from_workload['tasks'] if 'constraints' in dict_from_workload['tasks'][k]]:
+        sites.update(dict_from_workload['tasks'][tn]['constraints']['sites']['whitelist'])
+
       if pdmv_request_dict['pdmv_status_in_DAS']:
         if not phedexObj:
           phedexObj=phedex(pdmv_request_dict["pdmv_dataset_name"])
-          pdmv_request_dict['pdmv_custodial_sites']=custodials(phedexObj)
+          pdmv_request_dict['pdmv_custodial_sites']=custodials(phedexObj)        
 
-      if pdmv_request_dict['pdmv_custodial_sites']==[]:
-        ##try something new
-        if not dict_from_workload: dict_from_workload=getDictFromWorkload(req_name)
-        if not dict_from_workload:          return {}
-        #print dict_from_workload['tasks']['StepOneProc']['constraints']
-        taskNameInSchema='StepOneProc'
-        try:
-          if not taskNameInSchema in dict_from_workload['tasks']:
-            taskNameInSchema='DataProcessing'
-          sitesList=filter(lambda s : s.startswith('T1_'), dict_from_workload['tasks'][taskNameInSchema]['constraints']['sites']['whitelist'])
-          pdmv_request_dict['pdmv_custodial_sites']=sitesList
-        except:
-          print "Could not get site white list for",req_name,taskNameInSchema
+          if pdmv_request_dict['pdmv_custodial_sites']==[]:
+            pdmv_request_dict['pdmv_custodial_sites']=filter(lambda s : s.startswith('T1_'), sites)
+
+      pdmv_request_dict['pdmv_assigned_sites']= list(sites)
 
     needsToBeUsed=True
     notNeededByUSers=['GEN-SIM','GEN-RAW']
