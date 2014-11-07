@@ -4,8 +4,6 @@ import json
 
 def Performances(request):
     url="/couchdb/workloadsummary/"+request
-    #url="/couchdb/_utils/document.html?workloadsummary/"+request
-    #url="/reqmgr/view/showWorkload?requestName="+request
     urlconn='cmsweb.cern.ch'
     conn = httplib.HTTPSConnection(urlconn,
                                    cert_file = os.getenv('X509_USER_PROXY'),
@@ -53,10 +51,7 @@ def Performances(request):
     return r_result
 
 if __name__ == "__main__":
-     #request='vlimant_Winter532012CJetHT_FNALPrio2_537p5_130122_195546_898'
-     #request='etorassa_SUS-Summer12_DR53X-00035_No_custT1_batch74_v1__121008_175518_4071'
-     #request='spinoso_HIG-Summer12-01069_R2251_B248_03_LHE_130218_191037_9245'
-     #request='efajardo_ACDC_BTV-Summer12_DR53X-00031_T1_TW_ASGC_MSS_105_v1__130218_140413_7795'
+
      request='franzoni_EflowHpu_NuGun25ns_RAWRECOSIMHLT_130219_175620_5038'
      request='nnazirid_BTV-Summer12_DR53X-00031_T1_TW_ASGC_MSS_105_v1__130213_184430_4540'
      request='efajardo_ACDC_BTV-Summer12_DR53X-00026_T1_TW_ASGC_MSS_97_v1___130207_112221_5777'

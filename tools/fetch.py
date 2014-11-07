@@ -1,49 +1,20 @@
 #! /usr/bin/env python
 
-# A bunch of clob variables
-
-# Old Global Monitor
-#gm_address="https://reqmon-dev02.cern.ch/reqmgr/monitorSvc/"
-gm_address="https://vocms204.cern.ch/reqmgr/monitorSvc/"
-couch_address="https://cmsweb.cern.ch/couchdb/reqmgr_workload_cache/"
 req2dataset="https://cmsweb.cern.ch/reqmgr/reqMgr/outputDatasetsByRequestName/"
 request_detail_address="https://cmsweb.cern.ch/reqmgr/view/showWorkload?requestName="
-#das_host = 'https://cmsweb.cern.ch'
-das_host = 'https://das.cern.ch/das'
-runStats_address = 'https://cmsweb.cern.ch/couchdb/workloadsummary/_design/WorkloadSummary/_show/histogramByWorkflow/'
 dbs3_url = 'https://cmsweb.cern.ch/dbs/prod/global/DBSReader/'
 
-
-#-------------------------------------------------------------------------------
+#################
 import sys
-
-req_version = (2,6)
-cur_version = sys.version_info
-
-if cur_version < req_version:
-  print "At least Python 2.6 is required!"
-  sys.exit(1)
-
-#-------------------------------------------------------------------------------
-
+import os
+import json
+import pprint
+import datetime
 import os
 import httplib
 import urllib2
 import urllib
 import time
-import datetime
-import commands
-import re
-from pprint import pprint,pformat
-import multiprocessing
-import itertools
-import random
-
-#################
-### NEW imports
-import sys
-import os
-import json
 from threading import Thread
 from couchDB import Interface
 from phedex import phedex,runningSites,custodials,atT2,atT3
@@ -54,22 +25,6 @@ import copy
 from growth import plotGrowth
 import optparse
 #################
-
-
-# Collect all the requests which are in one of these stati which allow for 
-priority_changable_stati=['new','assignment-approved']
-#skippable_stati=[]
-skippable_stati=["rejected", "aborted","failed","rejected-archived","aborted-archived","failed-archived"]
-#complete_stati=["announced","closed-out","completed","rejected", "aborted","failed"]
-complete_stati=["announced","rejected", "aborted","failed","normal-archived","aborted-archived","failed-archived"]
-
-# Types of requests
-request_types=['MonteCarlo',
-               'MonteCarloFromGEN',
-               'ReDigi',
-               'ReReco',
-               'Resubmission']
-
 #-------------------------------------------------------------------------------  
 # Needed for authentication
 
@@ -120,13 +75,6 @@ class X509CertOpen(urllib2.AbstractHTTPHandler):
       return self.do_open(X509CertAuth, req)
 
 #-------------------------------------------------------------------------------
-def eval_wma_string(string):
-    string=string.replace("null",'None')
-    string=string.replace("true","True")
-    string=string.replace("false","False")
-    return eval(string)
-
-#-------------------------------------------------------------------------------
 
 def generic_get(url, do_eval=True):
     opener=urllib2.build_opener(X509CertOpen())  
@@ -138,7 +86,7 @@ def generic_get(url, do_eval=True):
     ret_val=requests_list_str
     #print requests_list_str
     if do_eval:
-        ret_val=eval_wma_string(requests_list_str)
+        ret_val=json.loads(requests_list_str)
     return ret_val
 #-------------------------------------------------------------------------------
 
@@ -304,7 +252,7 @@ def get_expected_events_by_output_( request_name ):
         task[expectedOuputs] = get_strings( what['subscriptions'] )
         task['plenty'] = unique(filter(lambda s : '/' in s, get_strings( what['tree'] )))
 
-  ##pprint( schema )
+  ##pprint.pprint( schema )
   
   expected_per_dataset={}
   for (taskname,taski) in task_map.items():           
