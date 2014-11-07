@@ -852,7 +852,7 @@ class fetcher:
                   
       #evolution plots. does not matter to put more points
       if self.mb.options.plot:
-        plotGrowth( self.pdmv_request_dict, None )
+        plotGrowth( self.pdmv_request_dict, None ,force=self.mb.options.force)
 
       # put it back to db
       if self.worthTheUpdate():
@@ -909,7 +909,8 @@ class fetcher:
 
   def n_active( self ):
     n=0
-    for w in self.worker_pool: if w.is_alive(): n+=1
+    for w in self.worker_pool:
+        if w.is_alive(): n+=1
     return n
 
   def new_doc(self, with_info):
