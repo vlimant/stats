@@ -24,6 +24,9 @@ import traceback
 import copy
 from growth import plotGrowth
 import optparse
+from Performances import Performances
+from TransformRequestIntoDict import TransformRequestIntoDict
+import traceback
 #################
 #-------------------------------------------------------------------------------  
 # Needed for authentication
@@ -156,12 +159,10 @@ def get_expected_events_by_output( request_name ):
     return get_expected_events_by_output_( request_name )
   except:
     print "something went wrong in estimating the expected by output. no breaking the update though"
-    import traceback
     print traceback.format_exc()
     return {}
 
 def get_expected_events_by_output_( request_name ):
-  
   def get_item( i, d ):
     if type(d)!=dict: 
       return None
@@ -202,6 +203,7 @@ def get_expected_events_by_output_( request_name ):
   schema = dict_from_workload_local['request']['schema']
     
   if schema['RequestType'] != 'TaskChain':
+    ## this is the next thing to work on, make it work for non-taskchain  
     return {}
 
   task_i=1
@@ -264,7 +266,6 @@ def get_expected_events_by_output_( request_name ):
 
 def get_expected_events(request_name):
     workload_info=generic_get(request_detail_address+request_name, False)
-    #import os
     def getfield(line):
         line=line.replace("<br/>","").replace('\n','').replace(' ','')
         return line.split("=")[-1]
@@ -483,7 +484,6 @@ def get_status_nevts_from_dbs(dataset):
     blocks = ret
   except:
     print "Failed to get blocks for --",dataset,"--"
-    import traceback
     print traceback.format_exc()
     blocks = []
     return undefined
@@ -571,7 +571,6 @@ def calc_eta(level,running_days):
 def getDictFromWorkload(req_name, attributes=['request','constraints']):
 
   dict_from_workload={}
-  from TransformRequestIntoDict import TransformRequestIntoDict
   dict_from_workload=TransformRequestIntoDict( req_name, attributes, True )
   dontloopforever=0
   while dict_from_workload==None:
@@ -699,7 +698,6 @@ class fetcher:
     def getDictFromWorkload(self,attributes=['request','constraints']):
       if self.dict_from_workload: return
       self.dict_from_workload={}
-      from TransformRequestIntoDict import TransformRequestIntoDict
       self.dict_from_workload=TransformRequestIntoDict( self.wf, attributes, True )
       dontloopforever=0
       while self.dict_from_workload==None:
@@ -779,7 +777,7 @@ class fetcher:
       self.pdmv_request_dict['pdmv_type'] = self.dict_from_request['RequestType']
       self.pdmv_request_dict["pdmv_status_from_reqmngr"] = self.dict_from_request['RequestStatus']
 
-      ## getting sites : import things here
+      ## getting sites :
       sites=set()
       for tn in [k for k in self.dict_from_workload['tasks'] if 'constraints' in self.dict_from_workload['tasks'][k]]:
         sites.update(self.dict_from_workload['tasks'][tn]['constraints']['sites']['whitelist'])
@@ -829,6 +827,8 @@ class fetcher:
       if not self.pdmv_request_dict['pdmv_expected_events']:
         self.pdmv_request_dict['pdmv_expected_events'] = get_expected_events_withdict( self.dict_from_workload )
 
+      ## performance report
+      self.pdmv_request_dict['pdmv_performance']=Performances( self.wf )
       ## number of jobs : no-one use it ? broken source
       ## configs : only works for taskchains
       self.pdmv_request_dict['pdmv_configs'] = configsFromWorkload( self.wf )
