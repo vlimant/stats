@@ -1056,8 +1056,7 @@ class fetcher:
                       choices=['update','insert']
                       )
     parser.add_option("--db",
-                      #default="http://cms-pdmv-stats.cern.ch"
-                      default="http://iada-test.cern.ch:5984/stats_dev"
+                      default="http://cms-pdmv-stats.cern.ch:5984/stats"
                       )
     parser.add_option("--mcm",
                       default=False,
