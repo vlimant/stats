@@ -906,7 +906,6 @@ class fetcher:
     self.worker_pool = []
     self.work_list = set()
 
-
   def n_active( self ):
     n=0
     for w in self.worker_pool:
@@ -950,9 +949,14 @@ class fetcher:
     Full update cycle
     """     
     print len(self.work_list),"on the work list, for ",self.max_worker,"workers"
+    start = time.mktime(time.localtime())
     for (n,each) in enumerate(self.work_list):
       self.wait_for_next_slot()
       print "%d/%d] %s"%(n,len(self.work_list), each)
+      if n>1:
+          now = time.mktime(time.localtime())
+          t_per_r = (now - start) / (n-1)
+          print "\t ETA: %5.1f [min]"%( t_per_r * (len(self.work_list)-n) / 60.)
       self.worker_pool.append( self.worker( each , self ))
       self.worker_pool[-1].start()
       time.sleep(1)
