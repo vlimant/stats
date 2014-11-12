@@ -964,13 +964,15 @@ class fetcher:
     self.wait_for_completion()
 
     
-  def see_all_in_stats_status(self, status):
+  def see_all_in_stats_status(self, status=None):
+    if not status: return  
     ## get the list of docids in the given status : no wild card
     self.work_list.update(filter(lambda doc : not doc.startswith('_'), [doc['id'] for doc in self.statsCouch.get_view('status', '?key="%s"' %status)['rows']]))
 
   def see_all_running(self):
     self.see_all_in_stats_status('running-closed')
     self.see_all_in_stats_status('running-open')
+    self.see_all_in_stats_status('completed')
       
   def see_all_skewed(self):
     ## get the doc and decide ?
@@ -983,15 +985,26 @@ class fetcher:
       self.work_list.update([wma['name'] for wma in r['reqmgr_name']])
 
   def see_wild_card(self):
+    if not self.options.search: return
     ## from the search option
     self.get_stats_docids()
-    self.work_list = filter( lambda d : self.options.search in d, self.stats_docids)
+    self.work_list.update(filter( lambda d : self.options.search in d, self.stats_docids))
+
+  def see_all(self):
+      ## call all see_* methods
+      for k in filter(lambda k : k!='see_all' and k.starswith("see_"),self.__dict__.keys()):
+          getattr(self,k)()
 
   def parse_options(self):
     usage= "Usage:\n %prog options"
     parser = optparse.OptionParser(usage)
     parser.add_option("--search",
                       default=None
+                      )
+    parser.add_option("--all",
+                      help='combine all queries for doc update',
+                      default=False,
+                      action='store_true'
                       )
     parser.add_option("--force",
                       default=False,
@@ -1030,10 +1043,12 @@ class fetcher:
         self.see_all_submitted()
       else:
         if self.options.search:
-          ## we have a wild card 
-          self.see_wild_card()
+            ## we have a wild card 
+            self.see_wild_card()
+        elif self.options.all:
+            self.see_all()
         else:
-          self.see_all_running()
+            self.see_all_running()
       self.update()
 
 if __name__ == "__main__": 
