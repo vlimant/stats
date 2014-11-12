@@ -27,6 +27,7 @@ import optparse
 from Performances import Performances
 from TransformRequestIntoDict import TransformRequestIntoDict
 import traceback
+import itertools
 #################
 #-------------------------------------------------------------------------------  
 # Needed for authentication
@@ -975,8 +976,14 @@ class fetcher:
     self.see_all_in_stats_status('completed')
       
   def see_all_skewed(self):
-    ## get the doc and decide ?
-    print "Not implemented yet. No work done"
+    #print "Not implemented yet. No work done"
+    ## get the doc and decide ? ## not really no
+    # make a view for it ???
+    #self.work_list.update(filter(lambda doc : not doc.startswith('_'), [doc['id'] for doc in self.statsCouch.get_view('skewed', '?key=true')['rows']])) ## probably a good idea to limit the # of queries 
+
+    for (st,d) in itertools.product(["closed-out","announced","normal-archived"],["PRODUCTION",""]):
+        self.work_list.update(filter(lambda doc : not doc.startswith('_'), [doc['id'] for doc in self.statsCouch.get_view('status-das', '?key=["%s","%s"]' %(st,d))['rows']])) 
+        
 
   def see_all_submitted(self):
     ##caveat, only the one registered in McM will get updated.
@@ -1002,11 +1009,6 @@ class fetcher:
                       help='update the workflows containing the provide string',
                       default=None
                       )
-    parser.add_option("--all",
-                      help='combine all queries for doc update',
-                      default=False,
-                      action='store_true'
-                      )
     parser.add_option("--force",
                       default=False,
                       help='force the update in the database',
@@ -1026,35 +1028,40 @@ class fetcher:
                       help='action to be performed. possible is update or insert',
                       choices=['update','insert']
                       )
+    parser.add_option("--what",
+                      help='what to update',
+                      default='all',
+                      choices=['all','skewed','mcm','running']
+                      )
     parser.add_option("--db",
                       help='location of the database',
                       default="http://cms-pdmv-stats.cern.ch:5984/stats"
                       )
-    parser.add_option("--mcm",
-                      default=False,
-                      help='search for workflows that need update from mcm',
-                      action="store_true")
     self.options,args=parser.parse_args()
     
-    if self.options.mcm and self.options.search:
-      print "--search and --mcm are not compatible"
-      sys.exit(1)
+    if self.options.what != 'all' and self.options.search:
+        print "--search and --what %s are not compatible"% self.options.what
+        sys.exit(1)
       
     
   def go(self):
     if self.options.do == 'insert':
       self.insert()
     elif self.options.do == 'update':
-      if self.options.mcm:
+      if self.options.what == 'mcm':
         self.see_all_submitted()
       else:
         if self.options.search:
             ## we have a wild card 
             self.see_wild_card()
-        elif self.options.all:
+        elif self.options.what == 'all':
             self.see_all()
-        else:
+        elif self.options.what == 'running':
             self.see_all_running()
+        elif self.options.what == 'skewed':
+            self.see_all_skewed()
+        else:
+            print "Not implemented ",self.options.what
       self.update()
 
 if __name__ == "__main__": 
