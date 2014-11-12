@@ -903,7 +903,7 @@ class fetcher:
     self.statsCouch=Interface(self.options.db)
     self.stats_docids = None
     self.mcm = restful(dev=False)
-    self.max_worker = 10
+    self.max_worker = int(self.options.nthread)
     self.worker_pool = []
     self.work_list = set()
 
@@ -1037,8 +1037,11 @@ class fetcher:
                       help='location of the database',
                       default="http://cms-pdmv-stats.cern.ch:5984/stats"
                       )
+    parser.add_option("--nthread",
+                      help='number of parallel updates',
+                      default=5)
     self.options,args=parser.parse_args()
-    
+
     if self.options.what != 'all' and self.options.search:
         print "--search and --what %s are not compatible"% self.options.what
         sys.exit(1)
