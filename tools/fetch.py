@@ -999,6 +999,7 @@ class fetcher:
     usage= "Usage:\n %prog options"
     parser = optparse.OptionParser(usage)
     parser.add_option("--search",
+                      help='update the workflows containing the provide string',
                       default=None
                       )
     parser.add_option("--all",
@@ -1008,25 +1009,30 @@ class fetcher:
                       )
     parser.add_option("--force",
                       default=False,
+                      help='force the update in the database',
                       action='store_true'
                       )
     parser.add_option("--plot",
                       default=False,
+                      help='produce the evolution plot after update, regardless of db update',
                       action='store_true'
                       )
     parser.add_option("--inspect",
                       default=False,
+                      help='poll mcm for prepid inspection if applicable',
                       action='store_true'
                       )
     parser.add_option("--do",
+                      help='action to be performed. possible is update or insert',
                       choices=['update','insert']
                       )
     parser.add_option("--db",
+                      help='location of the database',
                       default="http://cms-pdmv-stats.cern.ch:5984/stats"
                       )
     parser.add_option("--mcm",
                       default=False,
-                      help="drives the update from submitted requests in McM",
+                      help='search for workflows that need update from mcm',
                       action="store_true")
     self.options,args=parser.parse_args()
     
