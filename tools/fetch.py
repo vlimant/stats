@@ -111,7 +111,8 @@ def get_requests_list(pattern="", not_in_wmstats=False):
       return get_requests_list_old(pattern)
     
     opener=urllib2.build_opener(X509CertOpen())  
-    url="https://cmsweb.cern.ch/wmstats/_design/WMStats/_view/requestByStatusAndType?stale=update_after"
+    #url="https://cmsweb.cern.ch/wmstats/_design/WMStats/_view/requestByStatusAndType?stale=update_after"
+    url="https://cmsweb.cern.ch/couchdb/reqmgr_workload_cache/_design/ReqMgr/_view/bystatusandtype"
     datareq = urllib2.Request(url)
     datareq.add_header('authenticated_wget', "The ultimate wgetter")  
     print "Getting the list of requests from %s..." %url,
